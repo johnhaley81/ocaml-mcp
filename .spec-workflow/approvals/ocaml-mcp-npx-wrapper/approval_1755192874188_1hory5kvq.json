@@ -1,0 +1,27 @@
+{
+  "id": "approval_1755192874188_1hory5kvq",
+  "title": "Tasks Phase: ocaml-mcp-npx-wrapper - Ready for Review",
+  "filePath": ".spec-workflow/specs/ocaml-mcp-npx-wrapper/tasks.md",
+  "type": "document",
+  "status": "needs-revision",
+  "createdAt": "2025-08-14T17:34:34.188Z",
+  "category": "spec",
+  "categoryName": "ocaml-mcp-npx-wrapper",
+  "response": "Feedback Summary (1 comments):\n\nSpecific Text Comments:\n1. \"- [ ] 20. Test on Windows WSL with OCaml projects\": Windows is not a current priority. Remove this section\n",
+  "annotations": "{\n  \"decision\": \"needs-revision\",\n  \"comments\": [\n    {\n      \"type\": \"selection\",\n      \"comment\": \"Windows is not a current priority. Remove this section\",\n      \"timestamp\": \"2025-08-14T17:38:00.694Z\",\n      \"selectedText\": \"- [ ] 20. Test on Windows WSL with OCaml projects\",\n      \"highlightColor\": {\n        \"bg\": \"rgba(255, 235, 59, 0.3)\",\n        \"border\": \"#FFEB3B\",\n        \"name\": \"#ffeb3b\"\n      },\n      \"id\": \"comment_1755193080694_c4h8lupl3\"\n    }\n  ],\n  \"summary\": \"Feedback Summary (1 comments):\\n\\nSpecific Text Comments:\\n1. \\\"- [ ] 20. Test on Windows WSL with OCaml projects\\\": Windows is not a current priority. Remove this section\\n\",\n  \"timestamp\": \"2025-08-14T17:39:05.362Z\"\n}",
+  "respondedAt": "2025-08-14T17:39:05.376Z",
+  "comments": [
+    {
+      "type": "selection",
+      "comment": "Windows is not a current priority. Remove this section",
+      "timestamp": "2025-08-14T17:38:00.694Z",
+      "selectedText": "- [ ] 20. Test on Windows WSL with OCaml projects",
+      "highlightColor": {
+        "bg": "rgba(255, 235, 59, 0.3)",
+        "border": "#FFEB3B",
+        "name": "#ffeb3b"
+      },
+      "id": "comment_1755193080694_c4h8lupl3"
+    }
+  ]
+}

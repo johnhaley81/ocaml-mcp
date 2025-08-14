@@ -1,0 +1,39 @@
+{
+  "id": "approval_1755191857108_w4roorws3",
+  "title": "Design Phase: ocaml-mcp-npx-wrapper - Ready for Review",
+  "filePath": ".spec-workflow/specs/ocaml-mcp-npx-wrapper/design.md",
+  "type": "document",
+  "status": "needs-revision",
+  "createdAt": "2025-08-14T17:17:37.114Z",
+  "category": "spec",
+  "categoryName": "ocaml-mcp-npx-wrapper",
+  "response": "Feedback Summary (2 comments):\n\nSpecific Text Comments:\n1. \"- **Path Sanitization:** Don't expose full system ...\": Neither of these make sense for a dev tool\n2. \"### Planned Extensions\": We might also want to try and generalize this wrapper for any given opam package later\n",
+  "annotations": "{\n  \"decision\": \"needs-revision\",\n  \"comments\": [\n    {\n      \"type\": \"selection\",\n      \"comment\": \"Neither of these make sense for a dev tool\",\n      \"timestamp\": \"2025-08-14T17:29:43.057Z\",\n      \"selectedText\": \"- **Path Sanitization:** Don't expose full system paths in errors\\n- **Credential Protection:** Never log repository credentials if present\",\n      \"highlightColor\": {\n        \"bg\": \"rgba(255, 235, 59, 0.3)\",\n        \"border\": \"#FFEB3B\",\n        \"name\": \"#ffeb3b\"\n      },\n      \"id\": \"comment_1755192583057_dh7mdqb4k\"\n    },\n    {\n      \"type\": \"selection\",\n      \"comment\": \"We might also want to try and generalize this wrapper for any given opam package later\",\n      \"timestamp\": \"2025-08-14T17:30:07.577Z\",\n      \"selectedText\": \"### Planned Extensions\",\n      \"highlightColor\": {\n        \"bg\": \"rgba(255, 235, 59, 0.3)\",\n        \"border\": \"#FFEB3B\",\n        \"name\": \"#ffeb3b\"\n      },\n      \"id\": \"comment_1755192607577_pihctiq34\"\n    }\n  ],\n  \"summary\": \"Feedback Summary (2 comments):\\n\\nSpecific Text Comments:\\n1. \\\"- **Path Sanitization:** Don't expose full system ...\\\": Neither of these make sense for a dev tool\\n2. \\\"### Planned Extensions\\\": We might also want to try and generalize this wrapper for any given opam package later\\n\",\n  \"timestamp\": \"2025-08-14T17:30:22.669Z\"\n}",
+  "respondedAt": "2025-08-14T17:30:22.694Z",
+  "comments": [
+    {
+      "type": "selection",
+      "comment": "Neither of these make sense for a dev tool",
+      "timestamp": "2025-08-14T17:29:43.057Z",
+      "selectedText": "- **Path Sanitization:** Don't expose full system paths in errors\n- **Credential Protection:** Never log repository credentials if present",
+      "highlightColor": {
+        "bg": "rgba(255, 235, 59, 0.3)",
+        "border": "#FFEB3B",
+        "name": "#ffeb3b"
+      },
+      "id": "comment_1755192583057_dh7mdqb4k"
+    },
+    {
+      "type": "selection",
+      "comment": "We might also want to try and generalize this wrapper for any given opam package later",
+      "timestamp": "2025-08-14T17:30:07.577Z",
+      "selectedText": "### Planned Extensions",
+      "highlightColor": {
+        "bg": "rgba(255, 235, 59, 0.3)",
+        "border": "#FFEB3B",
+        "name": "#ffeb3b"
+      },
+      "id": "comment_1755192607577_pihctiq34"
+    }
+  ]
+}
