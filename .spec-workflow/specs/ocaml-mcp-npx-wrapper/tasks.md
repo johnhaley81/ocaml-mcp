@@ -164,7 +164,7 @@ Implement the OCaml MCP NPX wrapper following Test-Driven Development (TDD) prin
 
 ### Phase 9: Cross-Platform Testing
 
-- [-] 18. Test on macOS with real OCaml projects
+- [x] 18. Test on macOS with real OCaml projects
   - Environment: macOS with opam installed
   - Test installation from official repository
   - Test execution with various server arguments
@@ -182,7 +182,7 @@ Implement the OCaml MCP NPX wrapper following Test-Driven Development (TDD) prin
 
 ### Phase 10: Documentation and Publishing
 
-- [ ] 20. Create comprehensive README documentation
+- [x] 20. Create comprehensive README documentation
   - File: npx-wrapper/README.md
   - Document installation via NPX
   - Provide usage examples for all features
@@ -191,7 +191,7 @@ Implement the OCaml MCP NPX wrapper following Test-Driven Development (TDD) prin
   - Purpose: Enable users to successfully use the wrapper
   - _Requirements: Non-Functional - Usability_
 
-- [ ] 21. Prepare package for NPM publishing
+- [x] 21. Prepare package for NPM publishing
   - Files: npx-wrapper/.npmignore, npx-wrapper/LICENSE
   - Add appropriate .npmignore to exclude tests and dev files
   - Ensure LICENSE file is included

@@ -1,0 +1,50 @@
+# Test files
+__tests__/
+lib/__tests__/
+*.test.js
+*.spec.js
+coverage/
+
+# Development files
+.eslintrc.cjs
+.prettierrc.json
+.prettierignore
+jest.config.cjs
+TESTING.md
+TROUBLESHOOTING.md
+INTEGRATION_TESTS_SUMMARY.md
+
+# Source control
+.git/
+.gitignore
+
+# Build artifacts
+*.log
+npm-debug.log*
+.DS_Store
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Documentation source files
+docs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Local environment
+.env.local
+.env.*.local
+
+# npm pack output
+*.tgz

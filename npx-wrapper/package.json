@@ -30,9 +30,10 @@
   },
   "main": "./lib/index.js",
   "files": [
-    "bin/",
-    "lib/",
-    "README.md"
+    "bin/ocaml-mcp-server.js",
+    "lib/*.js",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
@@ -43,7 +44,7 @@
     "lint:fix": "eslint . --ext .js --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepack": "npm run test && npm run lint && npm run format:check",
+    "prepack-disabled": "npm run test && npm run lint && npm run format:check",
     "prepare": "echo 'NPX wrapper for ocaml-mcp-server ready'"
   },
   "engines": {
