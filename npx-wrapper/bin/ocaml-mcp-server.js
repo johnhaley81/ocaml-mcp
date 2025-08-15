@@ -259,7 +259,7 @@ async function orchestrateExecution(args) {
         console.log('🔄 Installing ocaml-mcp-server via opam pin...');
       }
       
-      const installResult = await opamManager.installServer(args.repoUrl);
+      const installResult = await opamManager.installServerEnhanced(args.repoUrl);
       if (!installResult.success) {
         const errorHandler = new ErrorHandler();
         const formattedError = errorHandler.handleError(

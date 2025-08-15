@@ -4,6 +4,15 @@ export class OpamManager {
   constructor(execFunction = exec) {
     // Allow dependency injection for testing
     this._exec = execFunction;
+    
+    // Dependency resolution strategies
+    this.resolutionStrategies = {
+      'opam': this._resolveViaOpam.bind(this),
+      'github': this._resolveViaGithub.bind(this),
+      'git': this._resolveViaGit.bind(this),
+      'file': this._resolveViaFile.bind(this),
+      'archive': this._resolveViaArchive.bind(this)
+    };
   }
 
   /**
@@ -544,5 +553,95 @@ Error details: ${stderr || 'No additional details available'}`;
         });
       });
     });
+  }
+
+  /**
+   * Enhanced installServer method with multiple dependency resolution strategies
+   * @param {string} repoUrl - Repository URL or source specification
+   * @returns {Promise<{success: boolean, error: string | null}>}
+   */
+  async installServerEnhanced(repoUrl) {
+    const sourceType = this._detectSourceType(repoUrl);
+    console.log(`🔍 Detected source type: ${sourceType}`);
+    
+    const strategy = this.resolutionStrategies[sourceType];
+    if (!strategy) {
+      return { success: false, error: `Unsupported source type: ${sourceType}` };
+    }
+    
+    return await strategy(repoUrl);
+  }
+
+  /**
+   * Detect the type of source URL
+   * @param {string} repoUrl 
+   * @returns {string}
+   */
+  _detectSourceType(repoUrl) {
+    if (repoUrl.startsWith('github:')) return 'github';
+    if (repoUrl.startsWith('file://') || repoUrl.startsWith('/')) return 'file';
+    if (repoUrl.endsWith('.tar.gz') || repoUrl.endsWith('.zip')) return 'archive';
+    if (repoUrl.startsWith('git+') || repoUrl.endsWith('.git')) return 'git';
+    return 'git'; // Default to git for URLs
+  }
+
+  /**
+   * Resolve dependency via standard opam repository
+   * @param {string} packageName 
+   * @returns {Promise<{success: boolean, error: string | null}>}
+   */
+  async _resolveViaOpam(packageName) {
+    console.log(`📦 Installing ${packageName} via opam repository...`);
+    const result = await this._execCommand(`opam install ${packageName} --yes`);
+    
+    if (result.error) {
+      return { success: false, error: result.stderr || result.error.message };
+    }
+    
+    return { success: true, error: null };
+  }
+
+  /**
+   * Resolve dependency via GitHub repository (using git subtree approach)
+   * @param {string} repoUrl 
+   * @returns {Promise<{success: boolean, error: string | null}>}
+   */
+  async _resolveViaGithub(repoUrl) {
+    // Convert github: prefix to full URL
+    const githubUrl = repoUrl.replace('github:', 'https://github.com/') + '.git';
+    return await this._resolveViaGit(githubUrl);
+  }
+
+  /**
+   * Resolve dependency via Git repository (fallback to original method)
+   * @param {string} repoUrl 
+   * @returns {Promise<{success: boolean, error: string | null}>}
+   */
+  async _resolveViaGit(repoUrl) {
+    console.log(`🔀 Installing from git repository: ${repoUrl}`);
+    // Use the original installServer method for git URLs
+    return await this.installServer(repoUrl);
+  }
+
+  /**
+   * Resolve dependency via file:// URL or local path
+   * @param {string} filePath 
+   * @returns {Promise<{success: boolean, error: string | null}>}
+   */
+  async _resolveViaFile(filePath) {
+    const cleanPath = filePath.replace('file://', '');
+    console.log(`📁 Installing from local path: ${cleanPath}`);
+    return await this.installServer(filePath);
+  }
+
+  /**
+   * Resolve dependency via archive download
+   * @param {string} archiveUrl 
+   * @returns {Promise<{success: boolean, error: string | null}>}
+   */
+  async _resolveViaArchive(archiveUrl) {
+    console.log(`📦 Installing from archive: ${archiveUrl}`);
+    // For now, treat archives as git URLs (opam can handle them)
+    return await this.installServer(archiveUrl);
   }
 }
