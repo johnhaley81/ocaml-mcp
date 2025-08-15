@@ -235,7 +235,7 @@ export class OpamManager {
 
       // Pin the package to the GitHub repository
       console.log('📦 Pinning ocaml-platform-sdk dependency...');
-      const pinCommand = 'opam pin add -n ocaml-platform-sdk https://github.com/tmattio/ocaml-platform-sdk.git --yes';
+      const pinCommand = 'opam pin add ocaml-platform-sdk https://github.com/tmattio/ocaml-platform-sdk.git --yes';
       const pinResult = await this._execCommand(pinCommand);
       
       if (pinResult.error) {
@@ -277,7 +277,7 @@ export class OpamManager {
 
         // Pin the package
         console.log(`📦 Pinning ${pkg} from repository...`);
-        const pinCommand = `opam pin add -n ${pkg} ${repoUrl} --yes`;
+        const pinCommand = `opam pin add ${pkg} ${repoUrl} --yes`;
         const pinResult = await this._execCommand(pinCommand);
         
         if (pinResult.error) {
