@@ -12,15 +12,22 @@ export class OpamManager {
    */
   async isServerInstalled() {
     try {
-      // First check if package is listed in opam
-      const listResult = await this._execCommand('opam list ocaml-mcp-server');
-      if (listResult.error || !listResult.stdout || listResult.stdout.trim() === '') {
+      // Check if package is listed as INSTALLED in opam (not just available)
+      const listResult = await this._execCommand('opam list ocaml-mcp-server --installed');
+      if (listResult.error || !listResult.stdout || listResult.stdout.trim() === '' || listResult.stdout.includes('No matches found')) {
         return false;
       }
 
-      // Then check if executable is working
-      const execResult = await this._execCommand('opam exec -- ocaml-mcp-server --help');
+      // If we get here, the package is installed. Let's also verify the executable works
+      // by checking if it can show help without the NPX wrapper interfering
+      const execResult = await this._execCommand('opam exec -- ocaml-mcp-server --version');
       if (execResult.error) {
+        return false;
+      }
+
+      // Check that the output is from the actual OCaml server, not the NPX wrapper
+      if (execResult.stdout.includes('@ocaml-mcp/server')) {
+        // This is the NPX wrapper output, not the real OCaml server
         return false;
       }
 

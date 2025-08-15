@@ -335,20 +335,18 @@ async function main(argv = process.argv) {
   }
 }
 
-// Execute main function if this file is run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main()
-    .then(exitCode => {
-      // In CLI context, we need to exit with proper code
-      // eslint-disable-next-line no-process-exit
-      process.exit(exitCode);
-    })
-    .catch(error => {
-      console.error('💥 Unhandled error in main:', error);
-      // eslint-disable-next-line no-process-exit
-      process.exit(EXIT_CODES.GENERAL_ERROR);
-    });
-}
+// Execute main function - always run when this script is invoked
+main()
+  .then(exitCode => {
+    // In CLI context, we need to exit with proper code
+    // eslint-disable-next-line no-process-exit
+    process.exit(exitCode);
+  })
+  .catch(error => {
+    console.error('💥 Unhandled error in main:', error);
+    // eslint-disable-next-line no-process-exit
+    process.exit(EXIT_CODES.GENERAL_ERROR);
+  });
 
 // Export for testing
 export {
