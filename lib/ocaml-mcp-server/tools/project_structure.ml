@@ -2,7 +2,17 @@ let name = "ocaml_project_structure"
 let description = "Return project layout, libraries, executables"
 
 module Args = struct
-  type t = unit [@@deriving yojson]
+  type t = unit
+
+  (* Custom JSON handling for unit type - accept empty object {} *)
+  let of_yojson = function
+    | `Assoc [] -> Ok ()
+    | `Assoc _ -> Ok ()  (* Accept any object, ignore fields *)
+    | `Null -> Ok ()     (* Also accept null *)
+    | json -> Error (Printf.sprintf "Expected object or null, got: %s" 
+                      (Yojson.Safe.to_string json))
+
+  let to_yojson () = `Assoc []
 
   let schema () =
     `Assoc
@@ -10,6 +20,7 @@ module Args = struct
         ("type", `String "object");
         ("properties", `Assoc []);
         ("required", `List []);
+        ("additionalProperties", `Bool false);
       ]
 end
 
@@ -27,10 +38,22 @@ module Output = struct
   }
   [@@deriving yojson]
 
+  type debug_info = {
+    command : string;
+    working_directory : string;
+    environment : string;
+    process_success : bool;
+    exit_code : int option;
+    stdout_lines : int;
+    stderr_lines : int;
+  }
+  [@@deriving yojson]
+
   type t = {
     project_root : string;
     build_context : string;
     components : component list;
+    debug_info : debug_info option; [@yojson.option]
   }
   [@@deriving yojson]
 end
@@ -193,31 +216,73 @@ let parse_dune_describe_output output =
 let execute ~sw:_ ~env (_sdk : Ocaml_platform_sdk.t) _args =
   Log.info (fun m -> m "project-structure tool called");
   Log.debug (fun m -> m "Running dune describe workspace");
+  
+  let debug_enabled = Sys.getenv_opt "OCAML_MCP_DEBUG" <> None in
 
-  (* Run dune describe using Eio.Process *)
-  try
-    let output_buf = Buffer.create 1024 in
-    let process_mgr = Eio.Stdenv.process_mgr env in
-    Eio.Process.run process_mgr ~executable:"dune"
-      [ "dune"; "describe"; "workspace"; "--format=csexp" ]
-      ~stdout:(Eio.Flow.buffer_sink output_buf);
+  (* Run dune describe process *)
+  let proc_mgr = Eio.Stdenv.process_mgr env in
+  let stdout_buf = Buffer.create 1024 in
+  let stderr_buf = Buffer.create 1024 in
+  let success, exit_code =
+    try
+      Eio.Process.run proc_mgr
+        [ "dune"; "describe"; "workspace"; "--format=csexp" ]
+        ~stdout:(Eio.Flow.buffer_sink stdout_buf)
+        ~stderr:(Eio.Flow.buffer_sink stderr_buf);
+      (true, Some 0)
+    with
+    | Eio.Exn.Io (Eio.Process.Exit_status (`Exited code), _) ->
+        (false, Some code)
+    | _ -> (false, None)
+  in
+  let stdout_content = Buffer.contents stdout_buf in
+  let stderr_content = Buffer.contents stderr_buf in
 
-    let output = Buffer.contents output_buf in
+  let stdout_lines = 
+    if stdout_content = "" then 0 else List.length (String.split_on_char '\n' stdout_content)
+  in
+  let stderr_lines = 
+    if stderr_content = "" then 0 else List.length (String.split_on_char '\n' stderr_content)
+  in
 
-    match parse_dune_describe_output output with
+  let debug_info = 
+    if debug_enabled then
+      Some {
+        Output.command = "dune describe workspace --format=csexp";
+        working_directory = ".";
+        environment = Printf.sprintf "OCAML_MCP_DEBUG=%s" 
+          (Option.value (Sys.getenv_opt "OCAML_MCP_DEBUG") ~default:"(not set)");
+        process_success = success;
+        exit_code;
+        stdout_lines;
+        stderr_lines;
+      }
+    else None
+  in
+
+  if success then
+    match parse_dune_describe_output stdout_content with
     | Ok (root, components) ->
         Log.debug (fun m -> m "Parsed %d components" (List.length components));
-        Ok { Output.project_root = root; build_context = "default"; components }
+        Ok { Output.project_root = root; build_context = "default"; components; debug_info }
     | Error msg ->
         Log.err (fun m -> m "Failed to parse dune describe output: %s" msg);
-        Error (Error.Parse_error msg)
-  with exn ->
+        (* Include stderr in error message for debugging *)
+        let full_msg = 
+          if stderr_content <> "" then
+            Printf.sprintf "%s\nstderr: %s" msg stderr_content
+          else msg
+        in
+        Error (Error.Parse_error full_msg)
+  else
     let msg =
-      match exn with
-      | Eio.Exn.Io (Eio.Process.E _, _) -> "dune describe failed"
-      | _ ->
-          Printf.sprintf "Error running dune describe: %s"
-            (Printexc.to_string exn)
+      match exit_code with
+      | Some code ->
+          Printf.sprintf "dune describe failed with exit code %d%s" code
+            (if stderr_content <> "" then Printf.sprintf "\nstderr: %s" stderr_content else "")
+      | None -> 
+          Printf.sprintf "dune describe failed%s"
+            (if stderr_content <> "" then Printf.sprintf "\nstderr: %s" stderr_content else "")
     in
     Log.err (fun m -> m "%s" msg);
     Error (Error.Dune_describe_failed msg)
