@@ -92,6 +92,12 @@ export class OpamManager {
         }
       }
 
+      // Check for ocaml-platform-sdk availability
+      const platformSdkResult = await this._execCommand('opam show ocaml-platform-sdk');
+      if (platformSdkResult.error) {
+        warnings.push('ocaml-platform-sdk not found. Will be pinned automatically during installation.');
+      }
+
       return { success: true, error: null, warnings };
     } catch (error) {
       return { 
@@ -153,6 +159,19 @@ export class OpamManager {
         preflightResult.warnings.forEach(warning => console.warn(`  - ${warning}`));
       }
 
+      // Ensure ocaml-platform-sdk is pinned before installation
+      const platformSdkResult = await this.ensurePlatformSdkPinned();
+      if (!platformSdkResult.success) {
+        return { success: false, error: platformSdkResult.error };
+      }
+
+      // Pin all local packages from the repository (mcp, mcp-eio, ocaml-mcp-server)
+      console.log('📦 Pinning all local packages from repository...');
+      const localPackagesResult = await this.ensureAllLocalPackagesPinned(repoUrl);
+      if (!localPackagesResult.success) {
+        return { success: false, error: localPackagesResult.error };
+      }
+
       // Auto-update repository if dependencies are missing
       const needsUpdate = preflightResult.warnings.some(w => 
         w.includes('dependencies not found') || w.includes('Consider running'));
@@ -166,8 +185,9 @@ export class OpamManager {
         }
       }
 
-      // Proceed with installation
-      const command = `opam pin add ocaml-mcp-server ${repoUrl} --yes`;
+      // Proceed with installation (packages are already pinned, just install them)
+      console.log('📦 Installing ocaml-mcp-server and dependencies...');
+      const command = `opam install ocaml-mcp-server --yes`;
       const result = await this._execCommand(command);
       
       if (!result.error) {
@@ -181,6 +201,116 @@ export class OpamManager {
       const errorMessage = this._getEnhancedErrorMessage(error, error.message || '', repoUrl);
       return { success: false, error: errorMessage };
     }
+  }
+
+  /**
+   * Ensure ocaml-platform-sdk is pinned to the correct repository
+   * @returns {Promise<{success: boolean, error: string | null}>}
+   */
+  async ensurePlatformSdkPinned() {
+    try {
+      // Check if ocaml-platform-sdk is already pinned
+      const checkResult = await this._execCommand('opam list ocaml-platform-sdk');
+      
+      // If it's already pinned/installed, we're good
+      if (!checkResult.error && checkResult.stdout && checkResult.stdout.includes('ocaml-platform-sdk')) {
+        return { success: true, error: null };
+      }
+
+      // Pin the package to the GitHub repository
+      console.log('📦 Pinning ocaml-platform-sdk dependency...');
+      const pinCommand = 'opam pin add -n ocaml-platform-sdk https://github.com/tmattio/ocaml-platform-sdk.git --yes';
+      const pinResult = await this._execCommand(pinCommand);
+      
+      if (pinResult.error) {
+        return { 
+          success: false, 
+          error: `Failed to pin ocaml-platform-sdk: ${pinResult.stderr || pinResult.error.message}` 
+        };
+      }
+
+      console.log('✅ ocaml-platform-sdk pinned successfully.');
+      return { success: true, error: null };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: `Error pinning ocaml-platform-sdk: ${error.message}` 
+      };
+    }
+  }
+
+  /**
+   * Ensure all local packages from the repository are pinned
+   * @param {string} repoUrl - Repository URL containing the packages
+   * @returns {Promise<{success: boolean, error: string | null, results: Array}>}
+   */
+  async ensureAllLocalPackagesPinned(repoUrl) {
+    // Pin packages in dependency order: mcp first, then mcp-eio, then ocaml-mcp-server
+    const packages = ['mcp', 'mcp-eio', 'ocaml-mcp-server'];
+    const results = [];
+    
+    for (const pkg of packages) {
+      try {
+        // Check if package is already pinned/installed
+        const checkResult = await this._execCommand(`opam list ${pkg}`);
+        if (!checkResult.error && checkResult.stdout && checkResult.stdout.includes(pkg)) {
+          console.log(`✅ ${pkg} already pinned/installed.`);
+          results.push({ package: pkg, success: true, alreadyPinned: true });
+          continue;
+        }
+
+        // Pin the package
+        console.log(`📦 Pinning ${pkg} from repository...`);
+        const pinCommand = `opam pin add -n ${pkg} ${repoUrl} --yes`;
+        const pinResult = await this._execCommand(pinCommand);
+        
+        if (pinResult.error) {
+          // Check if the error is because it's already pinned (sometimes opam returns error for already pinned)
+          const recheckResult = await this._execCommand(`opam list ${pkg}`);
+          if (!recheckResult.error && recheckResult.stdout && recheckResult.stdout.includes(pkg)) {
+            console.log(`✅ ${pkg} was already pinned.`);
+            results.push({ package: pkg, success: true, alreadyPinned: true });
+          } else {
+            console.error(`❌ Failed to pin ${pkg}: ${pinResult.stderr || pinResult.error.message}`);
+            results.push({ 
+              package: pkg, 
+              success: false, 
+              error: pinResult.stderr || pinResult.error.message 
+            });
+          }
+        } else {
+          console.log(`✅ ${pkg} pinned successfully.`);
+          results.push({ package: pkg, success: true, alreadyPinned: false });
+        }
+      } catch (error) {
+        console.error(`❌ Error pinning ${pkg}: ${error.message}`);
+        results.push({ 
+          package: pkg, 
+          success: false, 
+          error: error.message 
+        });
+      }
+    }
+    
+    const allSuccess = results.every(r => r.success);
+    const failedPackages = results.filter(r => !r.success);
+    
+    if (!allSuccess) {
+      const failureDetails = failedPackages
+        .map(r => `${r.package}: ${r.error}`)
+        .join('\n  ');
+      return {
+        success: false,
+        error: `Failed to pin some packages:\n  ${failureDetails}`,
+        results
+      };
+    }
+    
+    return {
+      success: true,
+      error: null,
+      results
+    };
   }
 
   /**
@@ -203,12 +333,14 @@ export class OpamManager {
     // - SSH Git URLs (git@...)
     // - SSH protocol URLs (ssh://git@...)
     // - Local paths (starting with /)
+    // - File URLs (file:///)
     // - URLs with branch specifications (#branch)
     const validPatterns = [
       /^https:\/\/.+\.git(\#.*)?$/,           // HTTPS Git URLs
       /^git@.+:.+\.git(\#.*)?$/,              // SSH Git URLs  
       /^ssh:\/\/git@.+\/.+\.git(\#.*)?$/,     // SSH protocol URLs
       /^\/.*$/,                               // Local absolute paths
+      /^file:\/\/\/.*$/,                      // File URLs
       /^https:\/\/.+/                         // Other HTTPS URLs (for custom domains)
     ];
 

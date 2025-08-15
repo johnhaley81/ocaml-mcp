@@ -580,15 +580,186 @@ describe('OpamManager - TDD Specification', () => {
     });
   });
 
-  describe('Integration Scenarios', () => {
-    test('should_complete_full_installation_workflow', async () => {
-      // GIVEN: Complete installation workflow (pin + install + verify)
+  describe('Multi-Package Pinning', () => {
+    test('should_pin_all_local_packages_in_dependency_order', async () => {
+      // GIVEN: Repository with multiple local packages
       const repoUrl = 'https://github.com/tmattio/ocaml-mcp.git';
       
-      mockExec.mockImplementationOnce((cmd, callback) => {
-        // opam pin add command
-        expect(cmd).toContain('opam pin add ocaml-mcp-server');
-        callback(null, 'ocaml-mcp-server is now pinned to ' + repoUrl + '\nBuilding and installing...', '');
+      // Mock responses for checking and pinning each package
+      mockExec
+        // Check mcp
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe('opam list mcp');
+          callback(new Error('Not found'), '', 'Package not found');
+        })
+        // Pin mcp
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe(`opam pin add -n mcp ${repoUrl} --yes`);
+          callback(null, 'mcp pinned successfully', '');
+        })
+        // Check mcp-eio
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe('opam list mcp-eio');
+          callback(new Error('Not found'), '', 'Package not found');
+        })
+        // Pin mcp-eio
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe(`opam pin add -n mcp-eio ${repoUrl} --yes`);
+          callback(null, 'mcp-eio pinned successfully', '');
+        })
+        // Check ocaml-mcp-server
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe('opam list ocaml-mcp-server');
+          callback(new Error('Not found'), '', 'Package not found');
+        })
+        // Pin ocaml-mcp-server
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe(`opam pin add -n ocaml-mcp-server ${repoUrl} --yes`);
+          callback(null, 'ocaml-mcp-server pinned successfully', '');
+        });
+
+      // WHEN: Pinning all local packages
+      const result = await opamManager.ensureAllLocalPackagesPinned(repoUrl);
+
+      // THEN: All packages should be pinned successfully
+      expect(result.success).toBe(true);
+      expect(result.error).toBe(null);
+      expect(result.results).toHaveLength(3);
+      expect(result.results[0].package).toBe('mcp');
+      expect(result.results[0].success).toBe(true);
+      expect(result.results[1].package).toBe('mcp-eio');
+      expect(result.results[1].success).toBe(true);
+      expect(result.results[2].package).toBe('ocaml-mcp-server');
+      expect(result.results[2].success).toBe(true);
+    });
+
+    test('should_skip_already_pinned_packages', async () => {
+      // GIVEN: Some packages are already pinned
+      const repoUrl = 'https://github.com/tmattio/ocaml-mcp.git';
+      
+      mockExec
+        // mcp already pinned
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe('opam list mcp');
+          callback(null, 'mcp  0.1.0  pinned to version 0.1.0', '');
+        })
+        // mcp-eio not pinned
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe('opam list mcp-eio');
+          callback(new Error('Not found'), '', 'Package not found');
+        })
+        // Pin mcp-eio
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe(`opam pin add -n mcp-eio ${repoUrl} --yes`);
+          callback(null, 'mcp-eio pinned successfully', '');
+        })
+        // ocaml-mcp-server already pinned
+        .mockImplementationOnce((cmd, callback) => {
+          expect(cmd).toBe('opam list ocaml-mcp-server');
+          callback(null, 'ocaml-mcp-server  0.1.0  pinned to version 0.1.0', '');
+        });
+
+      // WHEN: Pinning all local packages
+      const result = await opamManager.ensureAllLocalPackagesPinned(repoUrl);
+
+      // THEN: Should skip already pinned packages
+      expect(result.success).toBe(true);
+      expect(result.results[0].alreadyPinned).toBe(true);
+      expect(result.results[1].alreadyPinned).toBe(false);
+      expect(result.results[2].alreadyPinned).toBe(true);
+    });
+
+    test('should_handle_partial_pinning_failure', async () => {
+      // GIVEN: One package fails to pin
+      const repoUrl = 'https://github.com/tmattio/ocaml-mcp.git';
+      
+      mockExec
+        // mcp check and pin succeeds
+        .mockImplementationOnce((cmd, callback) => {
+          callback(new Error('Not found'), '', 'Package not found');
+        })
+        .mockImplementationOnce((cmd, callback) => {
+          callback(null, 'mcp pinned successfully', '');
+        })
+        // mcp-eio fails to pin
+        .mockImplementationOnce((cmd, callback) => {
+          callback(new Error('Not found'), '', 'Package not found');
+        })
+        .mockImplementationOnce((cmd, callback) => {
+          callback(new Error('Pin failed'), '', 'Repository not accessible');
+        })
+        // Recheck mcp-eio (failure verification)
+        .mockImplementationOnce((cmd, callback) => {
+          callback(new Error('Not found'), '', 'Package not found');
+        })
+        // ocaml-mcp-server check
+        .mockImplementationOnce((cmd, callback) => {
+          callback(new Error('Not found'), '', 'Package not found');
+        })
+        // ocaml-mcp-server pin
+        .mockImplementationOnce((cmd, callback) => {
+          callback(null, 'ocaml-mcp-server pinned successfully', '');
+        });
+
+      // WHEN: Pinning all local packages with one failure
+      const result = await opamManager.ensureAllLocalPackagesPinned(repoUrl);
+
+      // THEN: Should report partial failure
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Failed to pin some packages');
+      expect(result.error).toContain('mcp-eio');
+      expect(result.results[0].success).toBe(true);
+      expect(result.results[1].success).toBe(false);
+      expect(result.results[2].success).toBe(true);
+    });
+  });
+
+  describe('Integration Scenarios', () => {
+    test('should_complete_full_installation_workflow', async () => {
+      // GIVEN: Complete installation workflow (pin all packages + install)
+      const repoUrl = 'https://github.com/tmattio/ocaml-mcp.git';
+      
+      let callIndex = 0;
+      mockExec.mockImplementation((cmd, callback) => {
+        callIndex++;
+        
+        // Pre-flight checks
+        if (cmd.includes('opam --version')) {
+          callback(null, '2.1.5', '');
+        } else if (cmd.includes('opam switch show')) {
+          callback(null, 'default', '');
+        } else if (cmd.includes('opam repository list')) {
+          callback(null, 'default', '');
+        } else if (cmd.includes('opam show')) {
+          // Core deps check
+          callback(null, 'Package info', '');
+        } else if (cmd.includes('ocaml -version')) {
+          callback(null, 'The OCaml toplevel, version 5.0.0', '');
+        } else if (cmd.includes('opam list ocaml-platform-sdk')) {
+          // Platform SDK check
+          callback(new Error('Not found'), '', 'Package not found');
+        } else if (cmd.includes('opam pin add -n ocaml-platform-sdk')) {
+          // Pin platform SDK
+          callback(null, 'Pinned', '');
+        } else if (cmd.includes('opam list mcp')) {
+          // Check mcp packages - not installed
+          callback(new Error('Not found'), '', 'Package not found');
+        } else if (cmd.includes('opam pin add -n mcp')) {
+          // Pin mcp
+          callback(null, 'mcp pinned', '');
+        } else if (cmd.includes('opam pin add -n mcp-eio')) {
+          // Pin mcp-eio
+          callback(null, 'mcp-eio pinned', '');
+        } else if (cmd.includes('opam pin add -n ocaml-mcp-server')) {
+          // Pin ocaml-mcp-server
+          callback(null, 'ocaml-mcp-server pinned', '');
+        } else if (cmd === 'opam install ocaml-mcp-server --yes') {
+          // Final installation
+          callback(null, 'Installation successful', '');
+        } else {
+          // Default response for other commands
+          callback(null, 'Success', '');
+        }
       });
 
       // WHEN: Installing server through full workflow
@@ -597,6 +768,11 @@ describe('OpamManager - TDD Specification', () => {
       // THEN: Should complete successfully
       expect(result.success).toBe(true);
       expect(result.error).toBe(null);
+      
+      // Verify all packages were pinned
+      const pinCommands = mockExec.mock.calls.filter(call => 
+        call[0].includes('opam pin add -n'));
+      expect(pinCommands.length).toBeGreaterThanOrEqual(3); // At least mcp, mcp-eio, ocaml-mcp-server
     });
 
     test('should_handle_reinstallation_of_already_pinned_package', async () => {
