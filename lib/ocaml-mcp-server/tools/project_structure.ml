@@ -231,7 +231,7 @@ let execute ~sw:_ ~env (_sdk : Ocaml_platform_sdk.t) _args =
         ~stderr:(Eio.Flow.buffer_sink stderr_buf);
       (true, Some 0)
     with
-    | Eio.Exn.Io (Eio.Process.Exit_status (`Exited code), _) ->
+    | Eio.Exn.Io (Eio.Process.E (Eio.Process.Child_error (`Exited code)), _) ->
         (false, Some code)
     | _ -> (false, None)
   in
