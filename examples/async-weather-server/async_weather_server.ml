@@ -122,7 +122,7 @@ let () =
   (* Set up connection *)
   let stdin = Eio.Stdenv.stdin env in
   let stdout = Eio.Stdenv.stdout env in
-  let transport = Mcp_eio.Stdio.create ~stdin ~stdout in
+  let transport = Mcp_eio.Stdio.create ~stdin:(stdin :> Eio.Flow.source) ~stdout:(stdout :> Eio.Flow.sink) in
   let clock = Eio.Stdenv.clock env in
   let connection =
     Mcp_eio.Connection.create ~clock (module Mcp_eio.Stdio) transport

@@ -10,6 +10,7 @@
   mcp-eio.sdk
   eio
   eio.unix
+  unix
   ocaml-platform-sdk
   logs
   csexp

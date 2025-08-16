@@ -4,6 +4,6 @@ module Transport = Transport
 module Stdio = Transport_stdio
 module Socket = Transport_socket
 module Memory = Transport_memory
-module Http = Transport_http
+(* module Http = Transport_http (* disabled for now *) *)
 module Connection = Connection
 module Framing = Framing

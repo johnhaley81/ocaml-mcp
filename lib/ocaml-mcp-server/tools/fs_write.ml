@@ -66,10 +66,22 @@ let execute ~sw:_ ~env (sdk : Ocaml_platform_sdk.t) (args : Args.t) =
 
   (* Ensure parent directories exist using Eio *)
   let dir = Filename.dirname file_path in
-  (try Eio.Path.mkdirs ~perm:0o755 Eio.Path.(fs / dir)
-   with _exn ->
-     (* Directory might already exist or we're in a normal case where parent exists *)
-     ());
+  (* Create directory recursively using mkdir (current EIO API) *)
+  let rec create_dir_recursive path_str =
+    try
+      Eio.Path.mkdir ~perm:0o755 Eio.Path.(fs / path_str)
+    with
+    | Eio.Io (Eio.Fs.E (Already_exists _), _) -> () (* Directory already exists *)
+    | Eio.Io (Eio.Fs.E (Not_found _), _) -> 
+        (* Parent doesn't exist, create it first *)
+        let parent = Filename.dirname path_str in
+        if parent <> path_str && parent <> "/" && parent <> "." then (
+          create_dir_recursive parent;
+          Eio.Path.mkdir ~perm:0o755 Eio.Path.(fs / path_str)
+        )
+    | _exn -> () (* Other errors, ignore *)
+  in
+  if dir <> "." && dir <> "/" then create_dir_recursive dir;
 
   (* Check if it's an OCaml file *)
   let is_ocaml_file =

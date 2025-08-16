@@ -1,3 +1,108 @@
-(tests
- (names test_mcp)
- (libraries mcp alcotest))
+(executable
+ (public_name test_build_status_limits)
+ (name test_build_status_limits)
+ (package mcp)
+ (modules test_build_status_limits)
+ (flags (:standard -w -69)))
+
+(executable
+ (public_name test_build_status_schemas)
+ (name test_build_status_schemas)
+ (package mcp)
+ (modules test_build_status_schemas)
+ (libraries yojson)
+ (flags (:standard -w -32-33-34-69)))
+
+(executable
+ (public_name test_mcp)
+ (name test_mcp)
+ (package mcp)
+ (modules test_mcp)
+ (libraries alcotest mcp)
+ (flags (:standard -w -69)))
+
+(executable
+ (public_name test_api_contract_comprehensive)
+ (name test_api_contract_comprehensive)
+ (package mcp)
+ (modules test_api_contract_comprehensive)
+ (libraries unix threads yojson ocaml-mcp-server)
+ (flags (:standard -w -69)))
+
+(executable
+ (public_name test_load_testing)
+ (name test_load_testing)
+ (package mcp)
+ (modules test_load_testing)
+ (libraries unix threads)
+ (flags (:standard -w -69)))
+
+(executable
+ (public_name test_contract_validation)
+ (name test_contract_validation)
+ (package mcp)
+ (modules test_contract_validation)
+ (libraries yojson ocaml-mcp-server)
+ (flags (:standard -w -69)))
+
+(executable
+ (public_name test_security_chaos)
+ (name test_security_chaos)
+ (package mcp)
+ (modules test_security_chaos)
+ (libraries unix threads yojson ocaml-mcp-server)
+ (flags (:standard -w -69)))
+
+; Simple API Contract Test (No External Dependencies)
+(executable
+ (public_name test_simple_api_contract)
+ (name test_simple_api_contract)
+ (package mcp)
+ (modules test_simple_api_contract)
+ (libraries unix yojson)
+ (flags (:standard -w -69)))
+
+; Production-Ready API Contract Testing Suite
+(executable
+ (public_name test_production_api_contract)
+ (name test_production_api_contract)
+ (package mcp)
+ (modules test_production_api_contract)
+ (libraries unix threads yojson ocaml-mcp-server)
+ (flags (:standard -w -69)))
+
+; High-Performance Load Testing Suite
+(executable
+ (public_name test_performance_load)
+ (name test_performance_load)
+ (package mcp)
+ (modules test_performance_load)
+ (libraries unix threads yojson ocaml-mcp-server)
+ (flags (:standard -w -69)))
+
+; Security and Resilience Testing Suite
+(executable
+ (public_name test_security_resilience)
+ (name test_security_resilience)
+ (package mcp)
+ (modules test_security_resilience)
+ (libraries unix threads yojson ocaml-mcp-server)
+ (flags (:standard -w -69)))
+
+; Production API Validation Test Runner (Main Entry Point)
+(executable
+ (public_name run_production_api_validation)
+ (name run_production_api_validation)
+ (package mcp)
+ (modules run_production_api_validation)
+ (libraries unix)
+ (flags (:standard -w -69)))
+
+; Test suite runner that orchestrates all tests (Legacy)
+(executable
+ (public_name run_comprehensive_api_tests)
+ (name run_comprehensive_api_tests)
+ (package mcp)
+ (modules run_comprehensive_api_tests)
+ (libraries unix)
+ (flags (:standard -w -69)))

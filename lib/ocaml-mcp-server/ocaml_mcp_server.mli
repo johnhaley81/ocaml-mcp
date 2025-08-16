@@ -84,3 +84,20 @@ val module_signature : (module S)
 val project_structure : (module S)
 val run_tests : (module S)
 val type_at_pos : (module S)
+
+(** {1 Module Access} *)
+
+module Tools : sig
+  module Build_status : S
+  module Build_target : S
+  module Eval : S
+  module Find_definition : S
+  module Find_references : S
+  module Fs_edit : S
+  module Fs_read : S
+  module Fs_write : S
+  module Module_signature : S
+  module Project_structure : S
+  module Run_tests : S
+  module Type_at_pos : S
+end
