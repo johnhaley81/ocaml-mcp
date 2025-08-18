@@ -226,10 +226,11 @@ export class OpamManager {
   async ensurePlatformSdkPinned() {
     try {
       // Check if ocaml-platform-sdk is already pinned
-      const checkResult = await this._execCommand('opam list ocaml-platform-sdk');
+      const checkResult = await this._execCommand('opam list --installed ocaml-platform-sdk');
       
-      // If it's already pinned/installed, we're good
-      if (!checkResult.error && checkResult.stdout && checkResult.stdout.includes('ocaml-platform-sdk')) {
+      // If it's already pinned/installed, we're good (check for exact match at line start)
+      const packageRegex = /^ocaml-platform-sdk\s+/m;
+      if (!checkResult.error && checkResult.stdout && packageRegex.test(checkResult.stdout)) {
         return { success: true, error: null };
       }
 
@@ -268,8 +269,10 @@ export class OpamManager {
     for (const pkg of packages) {
       try {
         // Check if package is already pinned/installed
-        const checkResult = await this._execCommand(`opam list ${pkg}`);
-        if (!checkResult.error && checkResult.stdout && checkResult.stdout.includes(pkg)) {
+        const checkResult = await this._execCommand(`opam list --installed ${pkg}`);
+        // Check for exact package name match at the beginning of a line
+        const packageRegex = new RegExp(`^${pkg}\\s+`, 'm');
+        if (!checkResult.error && checkResult.stdout && packageRegex.test(checkResult.stdout)) {
           console.log(`✅ ${pkg} already pinned/installed.`);
           results.push({ package: pkg, success: true, alreadyPinned: true });
           continue;
@@ -545,7 +548,20 @@ Error details: ${stderr || 'No additional details available'}`;
    */
   _execCommand(command) {
     return new Promise((resolve) => {
-      this._exec(command, (error, stdout, stderr) => {
+      // For opam pin add commands, set EDITOR=true to skip editor and pipe "y" for prompts
+      let finalCommand = command;
+      let options = {};
+      
+      if (command.includes('opam pin add')) {
+        // Set EDITOR=true to skip the editor prompt
+        options.env = { ...process.env, EDITOR: 'true' };
+        // Also pipe yes for any prompts
+        if (!command.startsWith('yes |')) {
+          finalCommand = `yes | ${command}`;
+        }
+      }
+      
+      this._exec(finalCommand, options, (error, stdout, stderr) => {
         resolve({
           stdout: stdout || '',
           stderr: stderr || '',
