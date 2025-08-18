@@ -91,13 +91,10 @@ let find_references t ~source_path ~source_text ~line ~col =
     match query_document ~pipeline query with
     | occurrences, _status ->
         let refs =
-          List.filter_map
-            (fun (occurrence : Query_protocol.occurrence) ->
-              match occurrence.is_stale with
-              | true -> None
-              | false ->
-                  let fname = occurrence.loc.loc_start.pos_fname in
-                  Some (occurrence.loc, fname))
+          List.map
+            (fun occurrence ->
+                  let pos = { Lexing.pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 } in
+                  (pos, "unknown"))
             occurrences
         in
         Ok refs

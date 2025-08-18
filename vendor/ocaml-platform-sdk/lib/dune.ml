@@ -144,7 +144,7 @@ let find_cm_file t ~module_path ~extension =
         )
     in
 
-    if Eio.Path.is_file direct_path then Ok (Some direct_path_str)
+    if (try ignore (Eio.Path.load direct_path); true with _ -> false) then Ok (Some direct_path_str)
     else
       (* Fallback: search recursively (can be slow, should be improved with more
          knowledge of dune's layout scheme if possible) *)
@@ -159,7 +159,7 @@ let find_cm_file t ~module_path ~extension =
                   (fun name ->
                     let path = dir / name in
                     let new_path_str = path_str ^ "/" ^ name in
-                    if Eio.Path.is_directory path then search path new_path_str
+                    if (try ignore (Eio.Path.read_dir path); true with _ -> false) then search path new_path_str
                     else None)
                   entries)
         | exception _ -> None

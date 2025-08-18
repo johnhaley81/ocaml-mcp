@@ -127,7 +127,7 @@ type progress =
   | Success
 
 type session = {
-  flow : Eio.Flow.two_way_ty Eio.Resource.t;
+  flow : Eio.Flow.two_way;
   buf_read : Buf_read.t;
   id : Drpc.Id.t; [@warning "-69"]
   request_id : Request_id.t;
@@ -265,7 +265,7 @@ let connect_to_instance ~sw ~net instance =
       try
         let addr = `Unix socket_path in
         let socket = Eio.Net.connect ~sw net addr in
-        let flow = (socket :> Eio.Flow.two_way_ty Eio.Resource.t) in
+        let flow = (socket :> Eio.Flow.two_way) in
         let buf_read = Buf_read.of_flow ~max_size:Int.max_int flow in
         match initialize_session ~flow ~buf_read with
         | Ok session -> Ok session

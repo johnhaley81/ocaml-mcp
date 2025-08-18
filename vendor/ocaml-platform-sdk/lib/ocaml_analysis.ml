@@ -60,7 +60,7 @@ let find_build_artifact ~env ~project_root ~module_path ~extension =
       (* Recursively search for the file using Eio *)
       let rec search_in_dir dir =
         let dir_path = Path.(fs / dir) in
-        match Path.kind ~follow:true dir_path with
+        match (try `Directory with _ -> `Other) with
         | `Directory -> (
             try
               let entries = Path.read_dir dir_path in
@@ -68,13 +68,13 @@ let find_build_artifact ~env ~project_root ~module_path ~extension =
                 (fun entry ->
                   let path = Filename.concat dir entry in
                   if entry = filename then
-                    match Path.kind ~follow:true Path.(fs / path) with
-                    | `Regular_file -> Some path
-                    | _ -> None
+                    if (try ignore (Path.load Path.(fs / path)); true with _ -> false) then Some path
+                    else None
                   else
-                    match Path.kind ~follow:true Path.(fs / path) with
-                    | `Directory -> search_in_dir path
-                    | _ -> None)
+                    try
+                      ignore (Path.read_dir Path.(fs / path));
+                      search_in_dir path
+                    with _ -> None)
                 entries
             with _ -> None)
         | _ -> None
