@@ -1,3 +1,0 @@
-[submodule "ocaml-platform-sdk"]
-	path = ocaml-platform-sdk
-	url = https://github.com/tmattio/ocaml-platform-sdk.git
