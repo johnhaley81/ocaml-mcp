@@ -11,7 +11,7 @@ module Args = struct
     max_diagnostics : int option;
     page : int option;
     severity_filter : severity_filter option;
-    file_pattern : string option;
+    _file_pattern : string option;
   }
   
   let of_yojson json = 
@@ -41,7 +41,7 @@ module Args = struct
             | Some (`String s) when String.length s > 200 -> failwith "file_pattern too long (max 200 chars)"
             | Some (`String s) -> Some s
             | _ -> None in
-          Ok { targets; max_diagnostics; page; severity_filter; file_pattern }
+          Ok { targets; max_diagnostics; page; severity_filter; _file_pattern = file_pattern }
       | _ -> Error "Request must be a JSON object"
     with
     | Failure msg -> Error msg
@@ -57,18 +57,9 @@ module Output = struct
     message : string;
   }
   
-  type build_summary = {
-    completed : int;
-    remaining : int;
-    failed : int;
-  }
   
   type diagnostic_summary = {
     total_diagnostics : int;
-    returned_diagnostics : int;
-    error_count : int;
-    warning_count : int;
-    build_summary : build_summary option;
   }
 
   type t = { 
@@ -124,7 +115,7 @@ module Output = struct
           let truncation_reason = match get_field "truncation_reason" with Some (`String s) -> Some s | _ -> None in
           let next_cursor = match get_field "next_cursor" with Some (`String s) -> Some s | _ -> None in
           let token_count = match get_field "token_count" with Some (`Int i) -> i | _ -> 0 in
-          let summary = { total_diagnostics=0; returned_diagnostics=0; error_count=0; warning_count=0; build_summary=None } in
+          let summary = { total_diagnostics=0 } in
           Ok { status; diagnostics; truncated; truncation_reason; next_cursor; token_count; summary }
       | _ -> Error "Response must be JSON object"
     with
@@ -138,27 +129,21 @@ type test_result = {
   name: string;
   status: test_status;
   duration_ms: float;
-  memory_kb: int option;
-  token_count: int option;
-  throughput_rps: float option;
 }
 
 let test_results = ref []
 let total_tests = ref 0
 
-let record_test name status ~duration_ms ?memory_kb ?token_count ?throughput_rps () =
+let record_test name status ~duration_ms () =
   incr total_tests;
-  let result = { name; status; duration_ms; memory_kb; token_count; throughput_rps } in
+  let result = { name; status; duration_ms } in
   test_results := result :: !test_results;
   let status_str = match status with
     | Pass -> "PASS"
     | Fail msg -> sprintf "FAIL: %s" msg 
     | Skip msg -> sprintf "SKIP: %s" msg in
   let perf_info = 
-    [Option.map (sprintf "%.2fms") (Some duration_ms);
-     Option.map (sprintf "%dKB" ) memory_kb;
-     Option.map (sprintf "%d tokens") token_count;
-     Option.map (sprintf "%.1f RPS") throughput_rps]
+    [Option.map (sprintf "%.2fms") (Some duration_ms)]
     |> List.filter_map (fun x -> x)
     |> String.concat ", " in
   printf "[%s] %s%s\n" status_str name 
@@ -358,10 +343,6 @@ module APIContractTests = struct
       token_count = 24950;
       summary = {
         total_diagnostics = 157;
-        returned_diagnostics = 2;
-        error_count = 89;
-        warning_count = 68;
-        build_summary = Some { completed = 45; remaining = 12; failed = 3 };
       };
     } in
     
@@ -444,10 +425,6 @@ module FunctionalTests = struct
           token_count = 0; (* Will be calculated *)
           summary = {
             total_diagnostics = List.length output_diagnostics;
-            returned_diagnostics = List.length output_diagnostics;
-            error_count = List.length (List.filter (fun d -> d.severity = "error") output_diagnostics);
-            warning_count = List.length (List.filter (fun d -> d.severity = "warning") output_diagnostics);
-            build_summary = None;
           };
         }
       ) in
@@ -469,7 +446,7 @@ module FunctionalTests = struct
       in
       
       record_test (sprintf "Token limit enforcement %d tokens" target_tokens) 
-        status ~duration_ms:duration ~token_count:estimated_tokens ()
+        status ~duration_ms:duration ()
     ) token_limits
   
   (* Test 2: Pagination Workflow *)
@@ -505,8 +482,6 @@ module FunctionalTests = struct
             token_count = List.length page_diagnostics * 40; (* Rough estimate *)
             summary = {
               total_diagnostics = List.length output_diagnostics;
-              returned_diagnostics = List.length page_diagnostics;
-              error_count = 0; warning_count = 0; build_summary = None;
             };
           }
         ) in
@@ -615,8 +590,8 @@ module PerformanceTests = struct
         List.length sorted
       ) in
       
-      let throughput = float_of_int processing_result /. (duration /. 1000.0) in
-      let memory_estimate = size * 200 / 1024 in (* Rough estimate in KB *)
+      let _ = float_of_int processing_result /. (duration /. 1000.0) in
+      let _ = size * 200 / 1024 in (* Rough estimate in KB *)
       
       let status = 
         if duration < 1000.0 then Pass  (* Should process under 1 second *)
@@ -625,7 +600,7 @@ module PerformanceTests = struct
       in
       
       record_test (sprintf "Load performance %d diagnostics" size) 
-        status ~duration_ms:duration ~memory_kb:memory_estimate ~throughput_rps:throughput ()
+        status ~duration_ms:duration ()
     ) dataset_sizes
   
   (* Test 2: Concurrent Request Simulation *)
@@ -650,14 +625,14 @@ module PerformanceTests = struct
     ) in
     
     let total_processed = List.length output_diagnostics in
-    let throughput = float_of_int total_processed /. (duration /. 1000.0) in
+    let _ = float_of_int total_processed /. (duration /. 1000.0) in
     
     let status = 
       if abs (concurrent_result - total_processed) <= 5 then Pass
       else Fail (sprintf "Concurrent processing lost data: %d vs %d" concurrent_result total_processed)
     in
     
-    record_test "Concurrent request processing" status ~duration_ms:duration ~throughput_rps:throughput ()
+    record_test "Concurrent request processing" status ~duration_ms:duration ()
   
   (* Test 3: Memory Usage Validation *)
   let test_memory_efficiency () =
@@ -693,14 +668,14 @@ module PerformanceTests = struct
       process_in_batches 0 1000 large_dataset
     ) in
     
-    let memory_estimate = 50000 * 200 / 1024 in (* Rough KB estimate *)
+    let _ = 50000 * 200 / 1024 in (* Rough KB estimate *)
     
     let status = 
       if duration < 10000.0 then Pass  (* Should process large dataset quickly *)
       else Fail "Memory processing too slow"
     in
     
-    record_test "Memory efficiency (50K diagnostics)" status ~duration_ms:duration ~memory_kb:memory_estimate ()
+    record_test "Memory efficiency (50K diagnostics)" status ~duration_ms:duration ()
 end
 
 (* Security Testing Suite *)
@@ -780,10 +755,6 @@ module SecurityTests = struct
           token_count = 0;
           summary = {
             total_diagnostics = 1000;
-            returned_diagnostics = 1000;
-            error_count = 1000;
-            warning_count = 0;
-            build_summary = None;
           };
         } in
         
@@ -819,10 +790,6 @@ module EdgeCaseTests = struct
         token_count = 50; (* Metadata only *)
         summary = {
           total_diagnostics = 0;
-          returned_diagnostics = 0;
-          error_count = 0;
-          warning_count = 0;
-          build_summary = None;
         };
       } in
       
@@ -834,7 +801,7 @@ module EdgeCaseTests = struct
     ) in
     
     let status = if empty_result then Pass else Fail "Empty dataset handling failed" in
-    record_test "Empty dataset handling" status ~duration_ms:duration ~token_count:50 ()
+    record_test "Empty dataset handling" status ~duration_ms:duration ()
   
   (* Test 2: Single Diagnostic Response *)
   let test_single_diagnostic () =
@@ -856,10 +823,6 @@ module EdgeCaseTests = struct
         token_count = 85;
         summary = {
           total_diagnostics = 1;
-          returned_diagnostics = 1;
-          error_count = 0;
-          warning_count = 1;
-          build_summary = None;
         };
       } in
       
@@ -870,7 +833,7 @@ module EdgeCaseTests = struct
     ) in
     
     let status = if single_result then Pass else Fail "Single diagnostic handling failed" in
-    record_test "Single diagnostic response" status ~duration_ms:duration ~token_count:85 ()
+    record_test "Single diagnostic response" status ~duration_ms:duration ()
   
   (* Test 3: Maximum Parameter Values *)
   let test_maximum_parameter_values () =
@@ -954,19 +917,7 @@ module TestReport = struct
       printf "\n";
     );
     
-    (* Token usage summary *)
-    let token_tests = List.filter (fun r -> Option.is_some r.token_count) results in
-    if List.length token_tests > 0 then (
-      let token_counts = List.filter_map (fun r -> r.token_count) token_tests in
-      let total_tokens = List.fold_left (+) 0 token_counts in
-      let max_tokens = List.fold_left max 0 token_counts in
-      
-      printf "=== TOKEN USAGE SUMMARY ===\n";
-      printf "Total Tokens Tested: %d\n" total_tokens;
-      printf "Maximum Single Response: %d tokens\n" max_tokens;
-      printf "Token Limit Compliance: %s\n" (if max_tokens <= 25000 then "PASS" else "FAIL");
-      printf "\n";
-    );
+    (* Token usage summary - removed as token_count field no longer exists in test_result *)
     
     (* Failure details *)
     let failed_tests = List.filter (fun r -> match r.status with Fail _ -> true | _ -> false) results in

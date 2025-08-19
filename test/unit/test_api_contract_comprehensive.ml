@@ -10,22 +10,21 @@ module Output = Ocaml_mcp_server.Testing.Build_status.Output
 (* Test framework *)
 type test_result = {
   name: string;
-  passed: bool;
   error_msg: string option;
   duration_ms: float option;
-  memory_usage: int option;
 }
 
 let test_count = ref 0
 let failed_tests = ref []
 let perf_results = ref []
 
-let record_test name passed ?error_msg ?duration_ms ?memory_usage () =
+let record_test name passed ?error_msg ?duration_ms () =
   incr test_count;
-  let result = { name; passed; error_msg; duration_ms; memory_usage } in
-  if not passed then
+  let error = if passed then None else (match error_msg with Some msg -> Some msg | None -> Some "Test failed") in
+  let result = { name; error_msg = error; duration_ms } in
+  if error <> None then
     failed_tests := result :: !failed_tests;
-  if duration_ms <> None || memory_usage <> None then
+  if duration_ms <> None then
     perf_results := result :: !perf_results
 
 let measure_time f =

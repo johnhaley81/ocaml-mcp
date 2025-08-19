@@ -14,15 +14,11 @@ type perf_metrics = {
   response_time_p95: float;
   response_time_p99: float;
   throughput_rps: float;
-  memory_usage_kb: int;
-  cpu_usage_percent: float;
   error_rate: float;
 }
 
 type load_test_result = {
   test_name: string;
-  target_load: int;
-  duration_seconds: float;
   metrics: perf_metrics;
   passed: bool;
   issues: string list;
@@ -311,8 +307,6 @@ module LoadTester = struct
       response_time_p95 = p95;
       response_time_p99 = p99;
       throughput_rps = actual_rps;
-      memory_usage_kb = avg_memory_kb;
-      cpu_usage_percent = 0.0; (* Simplified for this test *)
       error_rate;
     } in
     
@@ -327,8 +321,6 @@ module LoadTester = struct
     
     let result = {
       test_name;
-      target_load = concurrent_users;
-      duration_seconds = actual_duration;
       metrics;
       passed = List.length !issues = 0;
       issues = List.rev !issues;
