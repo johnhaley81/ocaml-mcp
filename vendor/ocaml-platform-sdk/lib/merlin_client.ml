@@ -92,12 +92,9 @@ let find_references t ~source_path ~source_text ~line ~col =
     | occurrences, _status ->
         let refs =
           List.filter_map
-            (fun (occurrence : Query_protocol.occurrence) ->
-              match occurrence.is_stale with
-              | true -> None
-              | false ->
-                  let fname = occurrence.loc.loc_start.pos_fname in
-                  Some (occurrence.loc, fname))
+            (fun (loc : Ocaml_utils.Warnings.loc) ->
+              let fname = loc.loc_start.pos_fname in
+              Some (loc, fname))
             occurrences
         in
         Ok refs
