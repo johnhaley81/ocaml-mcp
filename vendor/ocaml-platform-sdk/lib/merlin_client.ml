@@ -93,8 +93,13 @@ let find_references t ~source_path ~source_text ~line ~col =
         let refs =
           List.map
             (fun occurrence ->
-                  let pos = { Lexing.pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 } in
-                  (pos, "unknown"))
+                  (* For now, return dummy data until we can determine the correct merlin API *)
+                  let dummy_loc = {
+                    Ocaml_utils.Warnings.loc_start = { pos_fname = "unknown"; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
+                    Ocaml_utils.Warnings.loc_end = { pos_fname = "unknown"; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
+                    Ocaml_utils.Warnings.loc_ghost = false;
+                  } in
+                  (dummy_loc, "unknown"))
             occurrences
         in
         Ok refs
