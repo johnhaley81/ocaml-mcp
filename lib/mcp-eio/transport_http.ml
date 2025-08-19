@@ -15,8 +15,7 @@ type mode =
     }
   | Client of {
       config : client_config;
-      (* client module functions to be defined *)
-      client : unit; (* placeholder *)
+      client : Cohttp_eio.Client.t;
       (* Queue for received packets *)
       response_queue : Jsonrpc.Packet.t Stream.t;
     }
