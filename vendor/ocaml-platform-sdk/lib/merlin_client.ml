@@ -91,15 +91,10 @@ let find_references t ~source_path ~source_text ~line ~col =
     match query_document ~pipeline query with
     | occurrences, _status ->
         let refs =
-          List.map
-            (fun occurrence ->
-                  (* For now, return dummy data until we can determine the correct merlin API *)
-                  let dummy_loc = {
-                    Ocaml_utils.Warnings.loc_start = { pos_fname = "unknown"; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
-                    Ocaml_utils.Warnings.loc_end = { pos_fname = "unknown"; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
-                    Ocaml_utils.Warnings.loc_ghost = false;
-                  } in
-                  (dummy_loc, "unknown"))
+          List.filter_map
+            (fun (loc : Ocaml_utils.Warnings.loc) ->
+              let fname = loc.loc_start.pos_fname in
+              Some (loc, fname))
             occurrences
         in
         Ok refs
