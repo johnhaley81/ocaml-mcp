@@ -14,7 +14,7 @@ module type S = sig
 
   val recv :
     t ->
-    clock:_ Eio.Time.clock ->
+    clock:'clock Eio.Time.clock ->
     ?timeout:float ->
     unit ->
     Jsonrpc.Packet.t option

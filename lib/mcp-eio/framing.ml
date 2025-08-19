@@ -41,7 +41,7 @@ let rec yojson_to_json (yojson : Yojson.Safe.t) : Jsonrpc.Json.t =
       | Some v ->
           `Assoc [ ("variant", `String name); ("value", yojson_to_json v) ])
 
-let write_packet (sink : _ Flow.sink) (packet : Jsonrpc.Packet.t) =
+let write_packet (sink : 'a Flow.sink) (packet : Jsonrpc.Packet.t) =
   let json = Jsonrpc.Packet.yojson_of_t packet in
   let yojson = json_to_yojson json in
   let content = Yojson.Safe.to_string yojson in
