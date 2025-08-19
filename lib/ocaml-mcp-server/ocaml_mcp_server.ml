@@ -54,7 +54,6 @@ let create_server ~sw ~env ~config =
         | Some root -> root
         | None -> (
             (* Fall back to current working directory *)
-            (* Fall back to current directory *)
             "."))
   in
 
@@ -138,10 +137,5 @@ module Tools = struct
   module Type_at_pos = Type_at_pos
 end
 
-(* Testing module that exposes internal types for test files *)
-module Testing = struct
-  module Build_status = struct
-    module Args = Build_status.Args
-    module Output = Build_status.Output
-  end
-end
+module Testing_support = Testing_support
+
