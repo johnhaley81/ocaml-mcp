@@ -31,12 +31,6 @@ type load_test_result = {
 let test_results = ref []
 
 (* Utility functions for performance measurement *)
-let measure_cpu_time f =
-  let start_time = times () in
-  let result = f () in
-  let end_time = times () in
-  let cpu_time = (end_time.tms_utime +. end_time.tms_stime) -. (start_time.tms_utime +. start_time.tms_stime) in
-  (result, cpu_time)
 
 let measure_memory_usage f =
   (* Simplified memory measurement - in production, use system tools *)
@@ -290,7 +284,7 @@ module LoadTester = struct
     in
     
     (* Start worker domains *)
-    let domains = List.init concurrent_users (fun i -> Domain.spawn worker_thread) in
+    let domains = List.init concurrent_users (fun _ -> Domain.spawn worker_thread) in
     
     (* Wait for all domains and collect results *)
     let all_results = List.map Domain.join domains in
@@ -391,13 +385,6 @@ module PerformanceTests = struct
       ~duration_seconds:30.0
       ~target_rps:1000.0
   
-  let test_sustained_load () =
-    LoadTester.run_load_test
-      ~test_name:"Sustained Load (endurance)"
-      ~scenario:LoadTestData.medium_load_scenario
-      ~concurrent_users:20
-      ~duration_seconds:600.0  (* 10 minutes *)
-      ~target_rps:100.0
   
   let test_stress_load () =
     LoadTester.run_load_test
@@ -463,7 +450,6 @@ module TokenLimitPerformanceTests = struct
     let page_sizes = [10; 50; 100; 200] in
     
     List.iter (fun page_size ->
-      let test_name = sprintf "Pagination (page size %d)" page_size in
       
       (* Test multiple pages *)
       let page_tests = List.init 5 (fun page -> 

@@ -2,7 +2,6 @@
 (* Validates complete resolution of issue #2 token limits and ensures production readiness *)
 
 open Printf
-open Str
 
 (* Mock modules for testing since we can't access build_status directly *)
 module Args = struct
@@ -398,10 +397,10 @@ module APIContractTests = struct
       (`Assoc [("file_pattern", `String (String.make 250 'a'))], "too long");
     ] in
     
-    List.iteri (fun i (json, expected_msg_fragment) ->
+    List.iteri (fun i (json, _expected_msg_fragment) ->
       let (result, duration) = measure_performance (fun () -> Args.of_yojson json) in
       let status = match result with
-        | Error msg -> Pass (* TODO: Fix substring matching *)
+        | Error _msg -> Pass (* TODO: Fix substring matching *)
         | Ok _ -> Fail "Expected error but got success"
       in
       record_test (sprintf "Error message quality %d" i) status ~duration_ms:duration ()
@@ -666,7 +665,7 @@ module PerformanceTests = struct
     
     let large_dataset = TestDataGenerator.create_large_dataset 50000 in
     
-    let (memory_test_result, duration) = measure_performance (fun () ->
+    let (_memory_test_result, duration) = measure_performance (fun () ->
       (* Simulate streaming processing to avoid memory explosion *)
       let rec process_in_batches acc batch_size remaining =
         match remaining with
@@ -741,7 +740,7 @@ module SecurityTests = struct
       ("Very long target list", `Assoc [("targets", `List (List.init 1000 (fun i -> `String (sprintf "target_%d" i))))]);
     ] in
     
-    List.iteri (fun i (name, json) ->
+    List.iteri (fun _i (name, json) ->
       let (result, duration) = measure_performance (fun () ->
         try
           Args.of_yojson json |> Result.is_ok

@@ -45,18 +45,9 @@ module MockDune = struct
   }
   
   type mock_progress = 
-    | Waiting
-    | In_progress of { complete: int; remaining: int; failed: int }
-    | Failed
-    | Interrupted  
     | Success
   
-  let mock_progress_state = ref Success
-  let mock_diagnostics_state = ref []
   
-  let set_mock_state ~progress ~diagnostics =
-    mock_progress_state := progress;
-    mock_diagnostics_state := diagnostics
   
   let create_large_diagnostic_set n =
     let rec generate acc i =
@@ -248,10 +239,6 @@ module FunctionalTests = struct
     
     let status = match progress with
       | MockDune.Success -> "success"
-      | MockDune.Failed -> "failed"
-      | MockDune.Waiting -> "waiting"
-      | MockDune.Interrupted -> "interrupted"
-      | MockDune.In_progress _ -> "building"
     in
     
     (* Apply filters and limits (simplified version) *)
@@ -285,9 +272,7 @@ module FunctionalTests = struct
     let warning_count = List.length (List.filter (fun d -> d.Output.severity = "warning") formatted_diagnostics) in
     
     let build_summary = match progress with
-      | MockDune.In_progress {complete; remaining; failed} -> 
-          Some Output.{completed = complete; remaining; failed}
-      | _ -> None
+      | MockDune.Success -> None
     in
     
     Ok Output.{
@@ -468,7 +453,7 @@ module FunctionalTests = struct
     let priority_passed = match priority_result with
       | Ok response -> 
           (* Check that errors come first in the returned diagnostics *)
-          let (errors, warnings) = List.partition (fun d -> d.Output.severity = "error") response.diagnostics in
+          let _ = List.partition (fun d -> d.Output.severity = "error") response.diagnostics in
           let rec check_order = function
             | [] -> true
             | d :: rest -> 
@@ -732,7 +717,7 @@ module EdgeCaseTests = struct
     ) in
     
     let passed = match result with
-      | Ok response -> duration < 2000.0  (* Should handle max parameters efficiently *)
+      | Ok _ -> duration < 2000.0  (* Should handle max parameters efficiently *)
       | Error _ -> false
     in
     
