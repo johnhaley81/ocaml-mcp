@@ -322,7 +322,7 @@ module FunctionalTests = struct
     } in
     
     let (result, duration) = measure_time (fun () ->
-      FunctionalTests.mock_execute test_args large_diagnostics MockDune.Success
+      mock_execute test_args large_diagnostics MockDune.Success
     ) in
     
     let passed = match result with
@@ -347,7 +347,7 @@ module FunctionalTests = struct
     } in
     
     let (page0_result, page0_duration) = measure_time (fun () ->
-      FunctionalTests.mock_execute page0_args diagnostics MockDune.Success
+      mock_execute page0_args diagnostics MockDune.Success
     ) in
     
     let page0_passed = match page0_result with
@@ -367,7 +367,7 @@ module FunctionalTests = struct
     } in
     
     let (page1_result, page1_duration) = measure_time (fun () ->
-      FunctionalTests.mock_execute page1_args diagnostics MockDune.Success
+      mock_execute page1_args diagnostics MockDune.Success
     ) in
     
     let page1_passed = match page1_result with
@@ -386,7 +386,7 @@ module FunctionalTests = struct
     } in
     
     let (page2_result, page2_duration) = measure_time (fun () ->
-      FunctionalTests.mock_execute page2_args diagnostics MockDune.Success
+      mock_execute page2_args diagnostics MockDune.Success
     ) in
     
     let page2_passed = match page2_result with
@@ -416,7 +416,7 @@ module FunctionalTests = struct
     } in
     
     let (error_result, error_duration) = measure_time (fun () ->
-      FunctionalTests.mock_execute error_args mixed_diagnostics MockDune.Success
+      mock_execute error_args mixed_diagnostics MockDune.Success
     ) in
     
     let error_passed = match error_result with
@@ -435,7 +435,7 @@ module FunctionalTests = struct
     } in
     
     let (warning_result, warning_duration) = measure_time (fun () ->
-      FunctionalTests.mock_execute warning_args mixed_diagnostics MockDune.Success
+      mock_execute warning_args mixed_diagnostics MockDune.Success
     ) in
     
     let warning_passed = match warning_result with
@@ -462,7 +462,7 @@ module FunctionalTests = struct
     } in
     
     let (priority_result, priority_duration) = measure_time (fun () ->
-      FunctionalTests.mock_execute priority_args warning_first_diagnostics MockDune.Success
+      mock_execute priority_args warning_first_diagnostics MockDune.Success
     ) in
     
     let priority_passed = match priority_result with

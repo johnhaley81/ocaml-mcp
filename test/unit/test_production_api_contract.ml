@@ -639,14 +639,14 @@ module PerformanceTests = struct
     
     let (concurrent_result, duration) = measure_performance (fun () ->
       (* Simulate concurrent processing *)
-      let threads = List.init num_concurrent (fun i ->
-        Thread.create (fun () ->
+      let domains = List.init num_concurrent (fun i ->
+        Domain.spawn (fun () ->
           let filtered = List.filter (fun d -> (Hashtbl.hash d.Output.file) mod num_concurrent = i) output_diagnostics in
           List.length filtered
-        ) ()
+        )
       ) in
       
-      let results = List.map Thread.join threads in
+      let results = List.map Domain.join domains in
       List.fold_left (+) 0 results
     ) in
     
@@ -672,7 +672,21 @@ module PerformanceTests = struct
         match remaining with
         | [] -> acc
         | _ ->
-          let batch, rest = List.take_drop batch_size remaining in
+          let rec take n lst =
+            match n, lst with
+            | 0, _ | _, [] -> []
+            | n, x :: xs when n > 0 -> x :: take (n-1) xs
+            | _ -> []
+          in
+          let rec drop n lst =
+            match n, lst with
+            | 0, xs -> xs
+            | _, [] -> []
+            | n, _ :: xs when n > 0 -> drop (n-1) xs
+            | _ -> lst
+          in
+          let batch = take batch_size remaining in
+          let rest = drop batch_size remaining in
           let batch_output = FunctionalTests.mock_diagnostics_to_output batch in
           let filtered_batch = List.filter (fun d -> d.Output.severity = "error") batch_output in
           process_in_batches (acc + List.length filtered_batch) batch_size rest

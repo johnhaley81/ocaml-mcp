@@ -254,14 +254,21 @@ module LoadTester = struct
     
     (* Worker thread function *)
     let worker_thread () =
+      (* Capture variables for thread safety *)
+      let end_time_local = end_time in
+      let test_data_local = test_data in
+      let test_args_local = test_args in
+      let target_rps_local = target_rps in
+      let concurrent_users_local = concurrent_users in
+      
       let thread_responses = ref [] in
       let thread_errors = ref 0 in
       let thread_successes = ref 0 in
       let thread_memory = ref 0 in
       
-      while gettimeofday () < end_time do
+      while gettimeofday () < end_time_local do
         let (result, memory_used) = measure_memory_usage (fun () ->
-          simulate_api_request test_data test_args
+          simulate_api_request test_data_local test_args_local
         ) in
         
         thread_memory := !thread_memory + memory_used;
@@ -275,18 +282,18 @@ module LoadTester = struct
             incr thread_errors;
         
         (* Rate limiting - simple sleep to target RPS *)
-        let sleep_time = 1.0 /. (target_rps /. float_of_int concurrent_users) in
-        Thread.delay sleep_time;
+        let sleep_time = 1.0 /. (target_rps_local /. float_of_int concurrent_users_local) in
+        Unix.sleepf sleep_time;
       done;
       
       (!thread_responses, !thread_errors, !thread_successes, !thread_memory)
     in
     
-    (* Start worker threads *)
-    let threads = List.init concurrent_users (fun i -> Thread.create worker_thread ()) in
+    (* Start worker domains *)
+    let domains = List.init concurrent_users (fun i -> Domain.spawn worker_thread) in
     
-    (* Wait for all threads and collect results *)
-    let all_results = List.map Thread.join threads in
+    (* Wait for all domains and collect results *)
+    let all_results = List.map Domain.join domains in
     
     (* Aggregate results *)
     List.iter (fun (responses, errors, successes, memory) ->
