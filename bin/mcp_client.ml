@@ -233,7 +233,7 @@ let connect_transport ~env ~sw config =
       (* Use stdin/stdout of the current process *)
       let stdin = Eio.Stdenv.stdin env in
       let stdout = Eio.Stdenv.stdout env in
-      let transport = Mcp_eio.Stdio.create ~stdin:(stdin :> Eio.Flow.source) ~stdout:(stdout :> Eio.Flow.sink) in
+      let transport = Mcp_eio.Stdio.create ~stdin ~stdout in
       let clock = Eio.Stdenv.clock env in
       Mcp_eio.Connection.create ~clock (module Mcp_eio.Stdio) transport
   | Socket port ->

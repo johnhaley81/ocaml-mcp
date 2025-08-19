@@ -42,8 +42,8 @@
  (name test_contract_validation)
  (package mcp)
  (modules test_contract_validation)
- (libraries yojson ocaml-mcp-server)
- (flags (:standard -w -69)))
+ (libraries unix yojson ocaml-mcp-server)
+ (flags (:standard -w -69-32-34)))
 
 (executable
  (public_name test_security_chaos)
@@ -68,8 +68,8 @@
  (name test_production_api_contract)
  (package mcp)
  (modules test_production_api_contract)
- (libraries unix threads yojson ocaml-mcp-server)
- (flags (:standard -w -69)))
+ (libraries unix threads yojson ocaml-mcp-server str)
+ (flags (:standard -w -69-8)))
 
 ; High-Performance Load Testing Suite
 (executable
@@ -78,7 +78,7 @@
  (package mcp)
  (modules test_performance_load)
  (libraries unix threads yojson ocaml-mcp-server)
- (flags (:standard -w -69)))
+ (flags (:standard -w -69-8)))
 
 ; Security and Resilience Testing Suite
 (executable

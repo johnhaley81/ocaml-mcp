@@ -5,8 +5,8 @@ open Printf
 open Unix
 
 (* Import the build_status tool *)
-module Args = Ocaml_mcp_server.Tools.Build_status.Args
-module Output = Ocaml_mcp_server.Tools.Build_status.Output
+module Args = Ocaml_mcp_server.Testing.Build_status.Args
+module Output = Ocaml_mcp_server.Testing.Build_status.Output
 
 (* Performance metrics collection *)
 type perf_metrics = {
@@ -65,7 +65,7 @@ module LoadTestData = struct
     file_pattern_complexity: [`None | `Simple | `Complex];
   }
   
-  let create_diagnostic ~severity ~complexity index =
+  let create_diagnostic ~severity ~complexity index : Output.diagnostic =
     let severity_str = match severity with `Error -> "error" | `Warning -> "warning" in
     let file_base = "src/modules/deep/nested/path" in
     let file = sprintf "%s/module_%d.ml" file_base index in
@@ -80,7 +80,7 @@ module LoadTestData = struct
         (String.capitalize_ascii severity_str) file (index mod 100)
     in
     
-    Output.{
+    {
       severity = severity_str;
       file;
       line = (index mod 100) + 1;
@@ -159,14 +159,14 @@ module LoadTester = struct
         | Some pattern -> 
             List.filter (fun d -> 
               (* Simple pattern matching simulation *)
-              String.contains d.file '.' && String.length pattern < 100
+              String.contains d.Output.file '.' && String.length pattern < 100
             ) filtered_diagnostics
       in
       
       (* Sort by severity (errors first) *)
       let sorted_diagnostics = List.stable_sort (fun a b ->
-        if a.severity = "error" && b.severity = "warning" then -1
-        else if a.severity = "warning" && b.severity = "error" then 1
+        if a.Output.severity = "error" && b.Output.severity = "warning" then -1
+        else if a.Output.severity = "warning" && b.Output.severity = "error" then 1
         else 0
       ) pattern_filtered in
       
@@ -178,19 +178,27 @@ module LoadTester = struct
       
       let page_diagnostics = 
         if start_idx >= List.length sorted_diagnostics then []
-        else List.sub sorted_diagnostics start_idx (end_idx - start_idx)
+        else 
+          let rec take_skip lst skip take_count =
+            match lst, skip, take_count with
+            | _, _, 0 -> []
+            | [], _, _ -> []
+            | x :: xs, 0, n -> x :: (take_skip xs 0 (n - 1))
+            | _ :: xs, n, count -> take_skip xs (n - 1) count
+          in
+          take_skip sorted_diagnostics start_idx (end_idx - start_idx)
       in
       
       (* Estimate token count *)
       let estimated_tokens = List.fold_left (fun acc d ->
-        let msg_tokens = (String.length d.message) / 4 in
-        let file_tokens = (String.length d.file) / 6 in
+        let msg_tokens = (String.length d.Output.message) / 4 in
+        let file_tokens = (String.length d.Output.file) / 6 in
         acc + msg_tokens + file_tokens + 10  (* Base overhead *)
       ) 200 page_diagnostics in  (* 200 for metadata *)
       
       (* Create response *)
       let response = Output.{
-        status = if List.exists (fun d -> d.severity = "error") diagnostics then "success_with_warnings" else "success";
+        status = if List.exists (fun d -> d.Output.severity = "error") diagnostics then "success_with_warnings" else "success";
         diagnostics = page_diagnostics;
         truncated = estimated_tokens > 20000 || List.length sorted_diagnostics > List.length page_diagnostics;
         truncation_reason = if estimated_tokens > 20000 then Some "Token limit reached" 
@@ -201,8 +209,8 @@ module LoadTester = struct
         summary = {
           total_diagnostics = List.length diagnostics;
           returned_diagnostics = List.length page_diagnostics;
-          error_count = List.length (List.filter (fun d -> d.severity = "error") diagnostics);
-          warning_count = List.length (List.filter (fun d -> d.severity = "warning") diagnostics);
+          error_count = List.length (List.filter (fun d -> d.Output.severity = "error") diagnostics);
+          warning_count = List.length (List.filter (fun d -> d.Output.severity = "warning") diagnostics);
           build_summary = None;
         };
       } in
@@ -275,7 +283,7 @@ module LoadTester = struct
     in
     
     (* Start worker threads *)
-    let threads = List.init concurrent_users (fun _ -> Thread.create worker_thread ()) in
+    let threads = List.init concurrent_users (fun i -> Thread.create worker_thread ()) in
     
     (* Wait for all threads and collect results *)
     let all_results = List.map Thread.join threads in

@@ -3,6 +3,8 @@
 
 open Printf
 
+[@@@warning "-34-26-35"]
+
 (* Security test framework *)
 module SecurityTests = struct
   
@@ -21,7 +23,7 @@ module SecurityTests = struct
     error_message: string option;
   }
   
-  let security_results = ref []
+  let security_results = ref ([] : security_result list)
   
   let record_security_test name blocked response_time memory_safe error_msg =
     let result = { 
@@ -235,7 +237,7 @@ module ChaosTests = struct
     error_propagation_controlled: bool;
   }
   
-  let chaos_results = ref []
+  let chaos_results = ref ([] : chaos_result list)
   
   let record_chaos_test name survived graceful recovery_time controlled =
     let result = {
@@ -503,8 +505,8 @@ let print_security_chaos_results () =
   let chaos_tests = List.length !(ChaosTests.chaos_results) in
   let total_tests = security_tests + chaos_tests in
   
-  let security_passed = List.length (List.filter (fun r -> r.SecurityTests.attack_blocked && r.memory_safe) !(SecurityTests.security_results)) in
-  let chaos_passed = List.length (List.filter (fun r -> r.ChaosTests.survived_chaos && r.error_propagation_controlled) !(ChaosTests.chaos_results)) in
+  let security_passed = List.length (List.filter (fun (r : SecurityTests.security_result) -> r.attack_blocked && r.memory_safe) !(SecurityTests.security_results)) in
+  let chaos_passed = List.length (List.filter (fun (r : ChaosTests.chaos_result) -> r.survived_chaos && r.error_propagation_controlled) !(ChaosTests.chaos_results)) in
   let total_passed = security_passed + chaos_passed in
   
   printf "\n=== SECURITY & CHAOS TESTING RESULTS ===\n";
@@ -513,14 +515,14 @@ let print_security_chaos_results () =
   printf "Success rate: %.1f%%\n" (100.0 *. float_of_int total_passed /. float_of_int total_tests);
   
   printf "\n=== SECURITY TEST RESULTS ===\n";
-  List.iter (fun result ->
+  List.iter (fun (result : SecurityTests.security_result) ->
     let status = if result.attack_blocked && result.memory_safe then "✅" else "❌" in
     printf "%s %s (%.2fms)\n" status result.test_name result.response_time_ms;
     (match result.error_message with Some msg -> printf "   %s\n" msg | None -> ())
   ) (List.rev !(SecurityTests.security_results));
   
   printf "\n=== CHAOS TEST RESULTS ===\n";
-  List.iter (fun result ->
+  List.iter (fun (result : ChaosTests.chaos_result) ->
     let status = if result.survived_chaos && result.error_propagation_controlled then "✅" else "❌" in
     printf "%s %s" status result.scenario_name;
     (match result.recovery_time_ms with Some time -> printf " (%.2fms)" time | None -> ());
@@ -541,17 +543,17 @@ let print_security_chaos_results () =
   printf "✅ CPU spike resilience: Load-independent operation\n";
   printf "✅ Cascading failure recovery: Multi-failure scenarios\n";
   
-  let security_failed = List.filter (fun r -> not (r.SecurityTests.attack_blocked && r.memory_safe)) !(SecurityTests.security_results) in
-  let chaos_failed = List.filter (fun r -> not (r.ChaosTests.survived_chaos && r.error_propagation_controlled)) !(ChaosTests.chaos_results) in
+  let security_failed = List.filter (fun (r : SecurityTests.security_result) -> not (r.attack_blocked && r.memory_safe)) !(SecurityTests.security_results) in
+  let chaos_failed = List.filter (fun (r : ChaosTests.chaos_result) -> not (r.survived_chaos && r.error_propagation_controlled)) !(ChaosTests.chaos_results) in
   
   if security_failed <> [] || chaos_failed <> [] then begin
     printf "\n=== CRITICAL SECURITY/RESILIENCE ISSUES ===\n";
-    List.iter (fun result ->
-      printf "⚠️  Security vulnerability: %s\n" result.SecurityTests.test_name;
+    List.iter (fun (result : SecurityTests.security_result) ->
+      printf "⚠️  Security vulnerability: %s\n" result.test_name;
       (match result.error_message with Some msg -> printf "   %s\n" msg | None -> ())
     ) security_failed;
-    List.iter (fun result ->
-      printf "⚠️  Resilience failure: %s\n" result.ChaosTests.scenario_name;
+    List.iter (fun (result : ChaosTests.chaos_result) ->
+      printf "⚠️  Resilience failure: %s\n" result.scenario_name;
     ) chaos_failed
   end;
   

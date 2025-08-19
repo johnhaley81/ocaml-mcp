@@ -2,6 +2,7 @@
 (* Validates complete resolution of issue #2 token limits and ensures production readiness *)
 
 open Printf
+open Str
 
 (* Mock modules for testing since we can't access build_status directly *)
 module Args = struct
@@ -607,10 +608,10 @@ module PerformanceTests = struct
       let (processing_result, duration) = measure_performance (fun () ->
         (* Simulate processing pipeline *)
         let filtered = List.filter (fun d -> 
-          String.contains d.Output.file ".ml" || String.contains d.Output.file ".mli") output_diagnostics in
+          Str.string_match (Str.regexp ".*\\.mli?$") d.Output.file 0) output_diagnostics in
         let sorted = List.stable_sort (fun a b -> 
-          if a.severity = "error" && b.severity = "warning" then -1
-          else if a.severity = "warning" && b.severity = "error" then 1
+          if a.Output.severity = "error" && b.Output.severity = "warning" then -1
+          else if a.Output.severity = "warning" && b.Output.severity = "error" then 1
           else 0) filtered in
         List.length sorted
       ) in
@@ -968,11 +969,15 @@ module TestReport = struct
     
     (* Production readiness assessment *)
     printf "=== PRODUCTION READINESS ASSESSMENT ===\n";
+    let contains_substring haystack needle =
+      try ignore (Str.search_forward (Str.regexp_string needle) haystack 0); true
+      with Not_found -> false
+    in
     let critical_failures = List.filter (fun r ->
       match r.status with
-      | Fail msg when String.contains (String.lowercase_ascii msg) "token" -> true
-      | Fail msg when String.contains (String.lowercase_ascii msg) "security" -> true
-      | Fail msg when String.contains (String.lowercase_ascii msg) "performance" -> true
+      | Fail msg when contains_substring (String.lowercase_ascii msg) "token" -> true
+      | Fail msg when contains_substring (String.lowercase_ascii msg) "security" -> true
+      | Fail msg when contains_substring (String.lowercase_ascii msg) "performance" -> true
       | _ -> false
     ) results in
     

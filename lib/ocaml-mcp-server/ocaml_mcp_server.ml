@@ -96,8 +96,8 @@ let run_stdio ~(env : Eio_unix.Stdenv.base) ~config =
   Log.info (fun m -> m "Starting MCP server in stdio mode");
   Eio.Switch.run @@ fun sw ->
   let transport =
-    Mcp_eio.Stdio.create ~stdin:(Eio.Stdenv.stdin env :> Eio.Flow.source)
-      ~stdout:(Eio.Stdenv.stdout env :> Eio.Flow.sink)
+    Mcp_eio.Stdio.create ~stdin:(Eio.Stdenv.stdin env)
+      ~stdout:(Eio.Stdenv.stdout env)
   in
   let clock = Eio.Stdenv.clock env in
   let conn =
@@ -136,4 +136,12 @@ module Tools = struct
   module Project_structure = Project_structure
   module Run_tests = Run_tests
   module Type_at_pos = Type_at_pos
+end
+
+(* Testing module that exposes internal types for test files *)
+module Testing = struct
+  module Build_status = struct
+    module Args = Build_status.Args
+    module Output = Build_status.Output
+  end
 end
