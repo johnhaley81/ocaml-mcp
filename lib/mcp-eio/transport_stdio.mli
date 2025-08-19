@@ -7,7 +7,7 @@
 type t
 (** Transport instance for stdio communication. *)
 
-val create : stdin:_ Eio.Flow.source -> stdout:_ Eio.Flow.sink -> t
+val create : stdin:[> `Close | `Flow | `R | `Unix_fd] Eio.Flow.source -> stdout:[> `Close | `Flow | `W | `Unix_fd] Eio.Flow.sink -> t
 (** [create ~stdin ~stdout] creates stdio transport.
 
     Uses provided input and output streams for communication. *)

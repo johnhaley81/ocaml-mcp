@@ -7,20 +7,17 @@ let src = Logs.Src.create "mcp.eio.stdio" ~doc:"MCP Eio Stdio Transport logging"
 
 module Log = (val Logs.src_log src : Logs.LOG)
 
-type stdin = Flow.source_ty Eio.Std.r
-type stdout = Flow.sink_ty Eio.Std.r
-
 type t = {
-  _stdin : stdin; (* Kept for potential future use *)
-  stdout : stdout;
+  _stdin : [`Close | `Flow | `R | `Unix_fd] Flow.source; (* Kept for potential future use *)
+  stdout : [`Close | `Flow | `W | `Unix_fd] Flow.sink;
   buf_reader : Buf_read.t;
   mutable closed : bool;
 }
 
 let create ~stdin ~stdout =
   {
-    _stdin = (stdin :> stdin);
-    stdout :> stdout;
+    _stdin = (stdin :> [`Close | `Flow | `R | `Unix_fd] Flow.source);
+    stdout = (stdout :> [`Close | `Flow | `W | `Unix_fd] Flow.sink);
     buf_reader = Buf_read.of_flow ~max_size:1_000_000 stdin;
     closed = false;
   }

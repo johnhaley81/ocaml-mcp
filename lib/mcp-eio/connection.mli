@@ -8,7 +8,7 @@ type t
 (** Connection instance managing transport and message handling. *)
 
 val create :
-  clock:_ Eio.Time.clock -> (module Transport.S with type t = 'a) -> 'a -> t
+  clock:'clock Eio.Time.clock -> (module Transport.S with type t = 'a) -> 'a -> t
 (** [create ~clock transport_module transport_instance] creates connection.
 
     Wraps any transport implementation with connection management.

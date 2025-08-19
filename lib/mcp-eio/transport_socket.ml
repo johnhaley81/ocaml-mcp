@@ -15,7 +15,7 @@ type t = {
 let create_from_socket socket =
   {
     socket = Stream_socket.Socket socket;
-    buf_reader = Buf_read.of_flow ~max_size:1_000_000 (socket :> _ Flow.source);
+    buf_reader = Buf_read.of_flow ~max_size:1_000_000 (socket :> [> `Flow | `R] Flow.source);
     closed = false;
   }
 
@@ -32,7 +32,7 @@ let send t packet =
   if t.closed then failwith "Transport is closed"
   else
     let (Stream_socket.Socket socket) = t.socket in
-    Framing.write_packet (socket :> _ Flow.sink) packet
+    Framing.write_packet (socket :> [> `Flow | `W] Flow.sink) packet
 
 let recv t ~clock ?timeout () =
   if t.closed then None
