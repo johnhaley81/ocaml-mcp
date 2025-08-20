@@ -137,5 +137,4 @@ module Tools = struct
   module Type_at_pos = Type_at_pos
 end
 
-module Testing_support = Testing_support
 

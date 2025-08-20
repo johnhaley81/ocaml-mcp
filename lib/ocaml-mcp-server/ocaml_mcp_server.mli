@@ -102,18 +102,4 @@ module Tools : sig
   module Type_at_pos : S
 end
 
-module Testing_support : sig
-  module Build_status : sig
-    module Args : sig
-      type t
-      val of_yojson : Yojson.Safe.t -> (t, string) Result.t
-      val to_yojson : t -> Yojson.Safe.t
-    end
-    
-    module Output : sig
-      type t
-      val to_yojson : t -> Yojson.Safe.t
-    end
-  end
-end
 

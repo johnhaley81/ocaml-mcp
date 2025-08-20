@@ -4,7 +4,7 @@
 open Printf
 
 (* Import necessary modules *)
-module Args = Ocaml_mcp_server.Testing_support.Build_status.Args
+module Args = Ocaml_mcp_server.Tools.Build_status.Args
 module Output = Build_types.Output
 
 (* Test framework *)
