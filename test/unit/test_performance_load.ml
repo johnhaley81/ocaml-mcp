@@ -5,16 +5,17 @@ open Printf
 open Unix
 open Ocaml_mcp_server
 
-(* Import the build_status tool *)
-module Args = Ocaml_mcp_server.Tools.Build_status.Args
-(* Test uses direct Build_types reference *)
-type diagnostic = {
-  severity : string;
-  file : string;
-  line : int;
-  column : int;
-  message : string;
-}
+(* Mock Args type for testing *)
+module Args = struct
+  type t = {
+    targets : string list option;
+    max_diagnostics : int option;
+    page : int option;
+    severity_filter : [`All | `Error | `Warning] option;
+    file_pattern : string option;
+  }
+end
+(* Use the Output.diagnostic type consistently *)
 
 type build_summary = {
   completed : int;
@@ -30,16 +31,7 @@ type diagnostic_summary = {
   build_summary : build_summary option;
 }
 
-type response_type = {
-  status : string;
-  diagnostics : diagnostic list;
-  truncated : bool;
-  truncation_reason : string option;
-  next_cursor : string option;
-  token_count : int;
-  summary : diagnostic_summary;
-}
-
+(* Output types for consistency *)
 module Output = struct
   type diagnostic = {
     severity : string;
@@ -48,8 +40,17 @@ module Output = struct
     column : int;
     message : string;
   }
-  type t = response_type
 end
+
+type response_type = {
+  status : string;
+  diagnostics : Output.diagnostic list;
+  truncated : bool;
+  truncation_reason : string option;
+  next_cursor : string option;
+  token_count : int;
+  summary : diagnostic_summary;
+}
 
 (* Performance metrics collection *)
 type perf_metrics = {
@@ -176,30 +177,30 @@ end
 module LoadTester = struct
   
   (* Simulate API request processing *)
-  let simulate_api_request diagnostics args =
+  let simulate_api_request (diagnostics : Output.diagnostic list) (args : Args.t) =
     let start_time = gettimeofday () in
     
     try
       (* Simulate the core processing logic *)
-      let filtered_diagnostics = match args.Args.severity_filter with
+      let filtered_diagnostics = match args.severity_filter with
         | None | Some `All -> diagnostics
-        | Some `Error -> List.filter (fun d -> d.Output.severity = "error") diagnostics
-        | Some `Warning -> List.filter (fun d -> d.Output.severity = "warning") diagnostics
+        | Some `Error -> List.filter (fun (d : Output.diagnostic) -> d.severity = "error") diagnostics
+        | Some `Warning -> List.filter (fun (d : Output.diagnostic) -> d.severity = "warning") diagnostics
       in
       
       let pattern_filtered = match args.file_pattern with
         | None -> filtered_diagnostics
         | Some pattern -> 
-            List.filter (fun d -> 
+            List.filter (fun (d : Output.diagnostic) -> 
               (* Simple pattern matching simulation *)
-              String.contains d.Output.file '.' && String.length pattern < 100
+              String.contains d.file '.' && String.length pattern < 100
             ) filtered_diagnostics
       in
       
       (* Sort by severity (errors first) *)
-      let sorted_diagnostics = List.stable_sort (fun a b ->
-        if a.Output.severity = "error" && b.Output.severity = "warning" then -1
-        else if a.Output.severity = "warning" && b.Output.severity = "error" then 1
+      let sorted_diagnostics = List.stable_sort (fun (a : Output.diagnostic) (b : Output.diagnostic) ->
+        if a.severity = "error" && b.severity = "warning" then -1
+        else if a.severity = "warning" && b.severity = "error" then 1
         else 0
       ) pattern_filtered in
       
@@ -223,15 +224,15 @@ module LoadTester = struct
       in
       
       (* Estimate token count *)
-      let estimated_tokens = List.fold_left (fun acc d ->
-        let msg_tokens = (String.length d.Output.message) / 4 in
-        let file_tokens = (String.length d.Output.file) / 6 in
+      let estimated_tokens = List.fold_left (fun acc (d : Output.diagnostic) ->
+        let msg_tokens = (String.length d.message) / 4 in
+        let file_tokens = (String.length d.file) / 6 in
         acc + msg_tokens + file_tokens + 10  (* Base overhead *)
       ) 200 page_diagnostics in  (* 200 for metadata *)
       
       (* Create response *)
       let response = Output.{
-        status = if List.exists (fun d -> d.Output.severity = "error") diagnostics then "success_with_warnings" else "success";
+        status = if List.exists (fun (d : Output.diagnostic) -> d.severity = "error") diagnostics then "success_with_warnings" else "success";
         diagnostics = page_diagnostics;
         truncated = estimated_tokens > 20000 || List.length sorted_diagnostics > List.length page_diagnostics;
         truncation_reason = if estimated_tokens > 20000 then Some "Token limit reached" 
@@ -242,8 +243,8 @@ module LoadTester = struct
         summary = {
           total_diagnostics = List.length diagnostics;
           returned_diagnostics = List.length page_diagnostics;
-          error_count = List.length (List.filter (fun d -> d.Output.severity = "error") diagnostics);
-          warning_count = List.length (List.filter (fun d -> d.Output.severity = "warning") diagnostics);
+          error_count = List.length (List.filter (fun (d : Output.diagnostic) -> d.severity = "error") diagnostics);
+          warning_count = List.length (List.filter (fun (d : Output.diagnostic) -> d.severity = "warning") diagnostics);
           build_summary = None;
         };
       } in
