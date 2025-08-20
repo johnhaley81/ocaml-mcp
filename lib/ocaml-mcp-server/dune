@@ -10,10 +10,14 @@
   mcp-eio.sdk
   eio
   eio.unix
+  unix
   ocaml-platform-sdk
   logs
   csexp
   merlin-lib.ocaml_parsing
-  merlin-lib.ocaml_utils)
+  merlin-lib.ocaml_utils
+  lwt
+  re
+  str)
  (preprocess
   (pps ppx_deriving_yojson)))

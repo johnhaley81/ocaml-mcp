@@ -28,17 +28,22 @@ let find_project_root env =
   let rec find_root dir =
     let dune_project_path = Path.(fs / dir / "dune-project") in
     let git_path = Path.(fs / dir / ".git") in
-    match
-      ( Path.kind ~follow:false dune_project_path,
-        Path.kind ~follow:false git_path )
-    with
-    | (`Regular_file | `Directory), _ | _, `Directory -> Some dir
-    | _ ->
-        let parent = Filename.dirname dir in
-        if parent = dir then None else find_root parent
+    (* Check if files exist by trying to access them *)
+    let has_dune_project = 
+      try ignore (Eio.Path.load dune_project_path); true 
+      with _ -> false 
+    in
+    let has_git = 
+      try ignore (Eio.Path.load git_path); true 
+      with _ -> false 
+    in
+    if has_dune_project || has_git then Some dir
+    else
+      let parent = Filename.dirname dir in
+      if parent = dir then None else find_root parent
   in
-  let cwd = Stdenv.cwd env in
-  match Path.native cwd with Some cwd_str -> find_root cwd_str | None -> None
+  (* Start from current working directory *)
+  find_root "."
 
 let create_server ~sw ~env ~config =
   let project_root =
@@ -49,9 +54,7 @@ let create_server ~sw ~env ~config =
         | Some root -> root
         | None -> (
             (* Fall back to current working directory *)
-            match Path.native (Stdenv.cwd env) with
-            | Some cwd -> cwd
-            | None -> "."))
+            "."))
   in
 
   (* Create ocaml-platform-sdk instance *)
@@ -88,7 +91,7 @@ let run ~sw ~env ~connection ~config =
   (* Run the async server - it handles MCP logging automatically *)
   Mcp_sdk_eio.Server.run ~sw ~env server connection
 
-let run_stdio ~env ~config =
+let run_stdio ~(env : Eio_unix.Stdenv.base) ~config =
   Log.info (fun m -> m "Starting MCP server in stdio mode");
   Eio.Switch.run @@ fun sw ->
   let transport =
@@ -118,3 +121,26 @@ let module_signature : (module S) = (module Module_signature)
 let project_structure : (module S) = (module Project_structure)
 let run_tests : (module S) = (module Run_tests)
 let type_at_pos : (module S) = (module Type_at_pos)
+
+module Tools = struct
+  module Build_status = Build_status
+  module Build_target = Build_target
+  module Eval = Eval
+  module Find_definition = Find_definition
+  module Find_references = Find_references
+  module Fs_edit = Fs_edit
+  module Fs_read = Fs_read
+  module Fs_write = Fs_write
+  module Module_signature = Module_signature
+  module Project_structure = Project_structure
+  module Run_tests = Run_tests
+  module Type_at_pos = Type_at_pos
+end
+
+(* Export utility modules *)
+module Token_counting = Token_counting
+module Build_types = Build_types
+module Diagnostic_stream = Diagnostic_stream
+module File_utils = File_utils
+
+

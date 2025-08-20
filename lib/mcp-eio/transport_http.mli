@@ -26,14 +26,14 @@ val create_server : sw:Switch.t -> port:int -> ?host:string -> unit -> t
     @param host Host address to bind to (default: "127.0.0.1") *)
 
 val create_client :
-  sw:Switch.t -> base_url:string -> < net : _ Eio.Net.t ; .. > -> t
+  sw:Switch.t -> base_url:string -> < net : 'a Eio.Net.t ; .. > -> t
 (** [create_client ~sw ~base_url env] creates HTTP client transport.
 
     @param sw Switch for structured concurrency
     @param base_url Base URL of the MCP server (e.g., "http://localhost:8080")
     @param env Eio environment for network access *)
 
-val run_server : t -> < net : _ Eio.Net.t ; .. > -> 'a
+val run_server : t -> < net : 'a Eio.Net.t ; .. > -> 'b
 (** [run_server t env] runs the HTTP server.
 
     This function blocks and runs the server until it's closed or an error

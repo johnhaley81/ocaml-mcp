@@ -18,6 +18,7 @@ Start dune RPC and MCP server:
 
   $ dune build --watch --root . &
   Success, waiting for filesystem changes...
+  Success, waiting for filesystem changes...
   $ DUNE_PID=$!
   $ ocaml-mcp-server --pipe test.sock -vv &
   ocaml-mcp-server: [INFO] Listening on unix:test.sock
@@ -36,7 +37,7 @@ Start dune RPC and MCP server:
   $ sleep 1
 
   $ mcp --pipe test.sock call dune_build_status
-  {"status":"waiting","diagnostics":[]}
+  {"status":"waiting","diagnostics":[],"truncated":false,"truncation_reason":null,"next_cursor":null,"token_count":99,"summary":{"total_diagnostics":0,"returned_diagnostics":0,"error_count":0,"warning_count":0,"build_summary":null}}
 
 Clean up:
 

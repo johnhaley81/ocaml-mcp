@@ -34,8 +34,8 @@ let get_dune_directives env =
   let process_mgr = Eio.Stdenv.process_mgr env in
 
   (* Check if this is a dune project *)
-  match Eio.Path.kind ~follow:true Eio.Path.(fs / "dune-project") with
-  | `Regular_file | `Directory -> (
+  (try ignore (Eio.Path.load Eio.Path.(fs / "dune-project")); (
+  (* dune-project exists *)
       try
         let output_buf = Buffer.create 1024 in
 
@@ -62,7 +62,8 @@ let get_dune_directives env =
               lines
         | Error _ -> []
       with _ -> [])
-  | _ -> []
+  with Eio.Io (Eio.Fs.E (Not_found _), _) -> []
+  | _ -> [])
 
 (* Evaluate code using ocaml *)
 let execute ~sw:_ ~env (_sdk : Ocaml_platform_sdk.t) (args : Args.t) =

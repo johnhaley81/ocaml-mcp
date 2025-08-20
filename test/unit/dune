@@ -1,3 +1,37 @@
-(tests
- (names test_mcp)
- (libraries mcp alcotest))
+(executable
+ (public_name test_mcp)
+ (name test_mcp)
+ (package mcp)
+ (modules test_mcp)
+ (libraries alcotest mcp))
+
+(executable
+ (public_name test_api_contract_comprehensive)
+ (name test_api_contract_comprehensive)
+ (package mcp)
+ (modules test_api_contract_comprehensive)
+ (libraries unix threads yojson ocaml-mcp-server)
+ (flags (:standard -w -69-34-27-33)))
+
+(executable
+ (public_name test_performance_load)
+ (name test_performance_load)
+ (package mcp)
+ (modules test_performance_load)
+ (libraries unix threads yojson ocaml-mcp-server)
+ (flags (:standard -w -69-34-27-33)))
+
+(executable
+ (public_name test_production_api_contract)
+ (name test_production_api_contract)
+ (package mcp)
+ (modules test_production_api_contract)
+ (libraries unix threads yojson ocaml-mcp-server str))
+
+(executable
+ (public_name test_token_validation)
+ (name test_token_validation)
+ (package ocaml-mcp-server)
+ (modules test_token_validation)
+ (libraries alcotest ocaml-mcp-server unix)
+ (flags (:standard -w -69)))
