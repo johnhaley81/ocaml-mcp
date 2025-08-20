@@ -6,7 +6,7 @@ open Unix
 
 (* Import the build_status tool *)
 module Args = Ocaml_mcp_server.Tools.Build_status.Args
-module Output = Build_types.Output
+module Output = Ocaml_mcp_server.Tools.Build_status.Output
 
 (* Performance metrics collection *)
 type perf_metrics = {
@@ -55,7 +55,7 @@ module LoadTestData = struct
     file_pattern_complexity: [`None | `Simple | `Complex];
   }
   
-  let create_diagnostic ~severity ~complexity index : Build_types.Output.diagnostic =
+  let create_diagnostic ~severity ~complexity index : Output.diagnostic =
     let severity_str = match severity with `Error -> "error" | `Warning -> "warning" in
     let file_base = "src/modules/deep/nested/path" in
     let file = sprintf "%s/module_%d.ml" file_base index in

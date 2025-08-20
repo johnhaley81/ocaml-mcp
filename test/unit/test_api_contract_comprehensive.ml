@@ -5,7 +5,7 @@ open Printf
 
 (* Import necessary modules *)
 module Args = Ocaml_mcp_server.Tools.Build_status.Args
-module Output = Build_types.Output
+module Output = Ocaml_mcp_server.Tools.Build_status.Output
 
 (* Test framework *)
 type test_result = {
@@ -137,12 +137,12 @@ module ContractTests = struct
     printf "Testing response schema validation...\n";
     
     (* Create test response *)
-    let test_response : Build_types.Output.t = {
+    let test_response : Output.t = {
       status = "success";
       diagnostics = [
-        { Build_types.Output.severity = "error"; file = "src/main.ml"; line = 10; column = 5; 
+        { Output.severity = "error"; file = "src/main.ml"; line = 10; column = 5; 
           message = "Unbound module Test" };
-        { Build_types.Output.severity = "warning"; file = "lib/utils.ml"; line = 20; column = 10;
+        { Output.severity = "warning"; file = "lib/utils.ml"; line = 20; column = 10;
           message = "Unused variable x" };
       ];
       truncated = false;

@@ -308,66 +308,6 @@ module StreamingProcessor = struct
     }
 end
 
-(* Legacy functions for compatibility *)
-let apply_pagination (args : Args.t) (diagnostics : Output.diagnostic list) : 
-  Output.diagnostic list * bool * string option * string option =
-  match args.page with
-  | None -> 
-    (* No pagination requested, return all diagnostics *)
-    (diagnostics, false, None, None)
-  | Some page ->
-    let page_size = match args.max_diagnostics with Some n -> n | None -> 50 in
-    let start_index = page * page_size in
-    let total_count = List.length diagnostics in
-    
-    if start_index >= total_count then
-      (* Page exceeds available data *)
-      ([], false, None, Some "Requested page exceeds available data")
-    else
-      let end_index = min (start_index + page_size) total_count in
-      let page_diagnostics = 
-        diagnostics 
-        |> List.mapi (fun i d -> (i, d))
-        |> List.filter (fun (i, _) -> i >= start_index && i < end_index)
-        |> List.map (fun (_, d) -> d)
-      in
-      let has_more = end_index < total_count in
-      let next_cursor = if has_more then Some (string_of_int (page + 1)) else None in
-      let truncation_reason = 
-        if has_more then Some "Results paginated - use next_cursor to get more pages" else None
-      in
-      (page_diagnostics, has_more, next_cursor, truncation_reason)
-
-let filter_diagnostics_by_token_limit ~max_tokens:_ (diagnostics : Output.diagnostic list) :
-    Output.diagnostic list * bool * string option =
-  (* Use 20,000 token soft limit with 5,000 buffer for metadata and safety *)
-  let soft_limit = 20000 in
-  let metadata_estimate = 1000 in  (* Conservative estimate for all metadata *)
-  let available_for_diagnostics = soft_limit - metadata_estimate in
-  
-  (* If no diagnostics, no truncation needed *)
-  if diagnostics = [] then ([], false, None) else
-  
-  let rec filter_loop acc acc_tokens remaining count =
-    match remaining with
-    | [] -> (List.rev acc, false, None) (* No truncation needed *)
-    | d :: rest ->
-        let d_tokens = Token_counting.estimate_diagnostic_tokens d in
-        (* Apply 1.4x safety multiplier for unknown tokenization variations *)
-        let d_tokens_safe = int_of_float (float_of_int d_tokens *. 1.4) in
-        let new_total = acc_tokens + d_tokens_safe in
-        
-        if new_total > available_for_diagnostics then
-          (* Would exceed limit, truncate here *)
-          let reason = Printf.sprintf 
-            "Response truncated after %d diagnostics due to 25,000 token limit (estimated %d tokens used)" 
-            count acc_tokens in
-          (List.rev acc, true, Some reason)
-        else
-          filter_loop (d :: acc) new_total rest (count + 1)
-  in
-  
-  filter_loop [] 0 diagnostics 0
 
 let execute ~sw:_ ~env:_ (sdk : Ocaml_platform_sdk.t) (args : Args.t) =
   match Dune.diagnostics sdk ~file:"" with
