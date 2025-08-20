@@ -12,7 +12,7 @@ module Args = struct
   type t = { 
     targets : string list option;
     max_diagnostics : int option;
-    page : int option;
+    cursor : string option;
     severity_filter : severity_filter option;
     file_pattern : string option;
   }
@@ -22,7 +22,7 @@ module Args = struct
     type args_json = {
       targets : string list option [@default None];
       max_diagnostics : int option [@default None];
-      page : int option [@default None];
+      cursor : string option [@default None];
       severity_filter : string option [@default None];
       file_pattern : string option [@default None];
     } [@@deriving yojson]
@@ -32,7 +32,7 @@ module Args = struct
   type validation_error = [
     | `Invalid_severity of string
     | `Invalid_max_diagnostics of int * string
-    | `Invalid_page of int * string
+    | `Invalid_cursor of string * string
     | `Invalid_file_pattern of string * string
   ]
   
@@ -41,8 +41,8 @@ module Args = struct
         Printf.sprintf "Invalid severity '%s', expected: 'error', 'warning', or 'all'" s
     | `Invalid_max_diagnostics (v, reason) ->
         Printf.sprintf "Invalid max_diagnostics value %d: %s" v reason
-    | `Invalid_page (v, reason) ->
-        Printf.sprintf "Invalid page value %d: %s" v reason
+    | `Invalid_cursor (cursor, reason) ->
+        Printf.sprintf "Invalid cursor '%s': %s" cursor reason
     | `Invalid_file_pattern (pattern, reason) ->
         Printf.sprintf "Invalid file_pattern '%s': %s" pattern reason
   
@@ -80,14 +80,26 @@ module Args = struct
       | Some n -> Ok (Some n)
     in
     
-    (* Validate page (non-negative and reasonable upper bound) *)
-    let page_result = match json_args.page with
+    (* Validate cursor (must be valid base64 or numeric offset) *)
+    let cursor_result = match json_args.cursor with
       | None -> Ok None
-      | Some p when p < 0 -> 
-          Error (`Invalid_page (p, "must be >= 0 (0-based pagination)"))
-      | Some p when p > 1000 -> 
-          Error (`Invalid_page (p, "must be <= 1000 to prevent memory exhaustion"))
-      | Some p -> Ok (Some p)
+      | Some cursor -> 
+          let cursor_len = String.length cursor in
+          if cursor_len = 0 then
+            Error (`Invalid_cursor (cursor, "cursor cannot be empty"))
+          else if cursor_len > 100 then
+            Error (`Invalid_cursor (cursor, "cursor too long (max 100 chars)"))
+          else
+            (* Simple validation: numeric offset or base64-like string *)
+            try
+              let _ = int_of_string cursor in
+              Ok (Some cursor) (* Numeric cursor *)
+            with Failure _ ->
+              (* Validate as potential base64/token *)
+              if Str.string_match (Str.regexp "^[a-zA-Z0-9+/=_-]+$") cursor 0 then
+                Ok (Some cursor)
+              else
+                Error (`Invalid_cursor (cursor, "invalid cursor format"))
     in
     
     (* Validate file_pattern (basic safety checks) *)
@@ -112,12 +124,12 @@ module Args = struct
     in
     
     (* Combine all validation results *)
-    match severity_filter_result, max_diagnostics_result, page_result, file_pattern_result with
-    | Ok severity_filter, Ok max_diagnostics, Ok page, Ok file_pattern ->
+    match severity_filter_result, max_diagnostics_result, cursor_result, file_pattern_result with
+    | Ok severity_filter, Ok max_diagnostics, Ok cursor, Ok file_pattern ->
         Ok {
           targets = json_args.targets;
           max_diagnostics;
-          page;
+          cursor;
           severity_filter;
           file_pattern;
         }
@@ -131,7 +143,7 @@ module Args = struct
     let json_args : Json.args_json = {
       targets = args.targets;
       max_diagnostics = args.max_diagnostics;
-      page = args.page;
+      cursor = args.cursor;
       severity_filter = Option.map severity_to_json_string args.severity_filter;
       file_pattern = args.file_pattern;
     } in
@@ -150,7 +162,7 @@ module Args = struct
   let default = {
     targets = None;
     max_diagnostics = None;
-    page = None;
+    cursor = None;
     severity_filter = Some `All;
     file_pattern = None;
   }
@@ -177,12 +189,11 @@ module Args = struct
                     ("maximum", `Int 1000);
                     ("description", `String "Maximum number of diagnostics to return (for token management)");
                   ] );
-              ( "page",
+              ( "cursor",
                 `Assoc
                   [
-                    ("type", `String "integer");
-                    ("minimum", `Int 0);
-                    ("description", `String "Page number for paginated results (0-based)");
+                    ("type", `String "string");
+                    ("description", `String "Cursor for paginated results (opaque token from previous response)");
                   ] );
               ( "severity_filter",
                 `Assoc
@@ -233,7 +244,7 @@ module StreamingProcessor = struct
   let process_diagnostics_stream 
       ~severity_filter 
       ~file_pattern 
-      ~page 
+      ~cursor 
       ~page_size 
       ~token_limit 
       ~metadata_tokens 
@@ -251,11 +262,16 @@ module StreamingProcessor = struct
     let pattern_filtered_stream = Diagnostic_stream.filter_stream ~predicate:file_predicate filtered_stream in
     
     (* Step 4: Priority sorting using streaming buffer *)
-    let max_buffer_size = match page with
-      | Some p -> 
-          (* Cap buffer size to prevent memory exhaustion attacks *)
-          let requested_buffer = (p + 1) * page_size + 100 in
-          min 10000 requested_buffer  (* Never exceed 10,000 diagnostics in memory *)
+    let max_buffer_size = match cursor with
+      | Some c -> 
+          (* Parse cursor to estimate buffer size needed *)
+          (try
+            let offset = int_of_string c in
+            let requested_buffer = offset + page_size + 100 in
+            min 10000 requested_buffer  (* Never exceed 10,000 diagnostics in memory *)
+          with Failure _ ->
+            min 5000 (List.length input_diagnostics) (* Conservative for non-numeric cursors *)
+          )
       | None -> min 10000 (List.length input_diagnostics) (* Reasonable buffer limit *)
     in
     
@@ -271,30 +287,34 @@ module StreamingProcessor = struct
     let filled_buffer = fill_buffer priority_buffer in
     let prioritized_stream = Diagnostic_stream.PriorityBuffer.to_stream filled_buffer in
     
-    (* Step 5: Apply pagination or token limits streaming *)
-    let (final_stream, has_more, next_cursor, truncation_reason) = match page with
-      | Some p ->
-          (* Pagination mode: stream only the requested page *)
-          let page_stream = Diagnostic_stream.take_page ~page:p ~page_size prioritized_stream in
-          (* Check if there are more items after this page *)
+    (* Step 5: Apply cursor-based pagination or token limits *)
+    let (final_stream, has_more, next_cursor, truncation_reason) = match cursor with
+      | Some cursor_str ->
+          (* Cursor-based pagination: parse cursor and skip to offset *)
+          let offset = try int_of_string cursor_str with Failure _ -> 0 in
+          let cursor_stream = Diagnostic_stream.skip_take ~skip:offset ~take:page_size prioritized_stream in
+          
+          (* Check if there are more items after this batch *)
           let test_stream = Diagnostic_stream.PriorityBuffer.to_stream filled_buffer in
-          let total_available = Diagnostic_stream.to_list ~limit:((p + 2) * page_size) test_stream |> List.length in
-          let has_more_pages = total_available > (p + 1) * page_size in
-          let next_cursor = if has_more_pages then Some (string_of_int (p + 1)) else None in
-          let truncation_reason = if has_more_pages then 
+          let total_available = Diagnostic_stream.to_list ~limit:(offset + page_size + 1) test_stream |> List.length in
+          let has_more_items = total_available > (offset + page_size) in
+          let next_cursor = if has_more_items then Some (string_of_int (offset + page_size)) else None in
+          let truncation_reason = if has_more_items then 
             Some "Results paginated - use next_cursor to get more pages" 
           else None in
-          (page_stream, has_more_pages, next_cursor, truncation_reason)
+          (cursor_stream, has_more_items, next_cursor, truncation_reason)
       | None ->
           (* Token limit mode: stream until token limit *)
           let token_limited_stream = Diagnostic_stream.take_while_under_token_limit 
             ~token_limit ~metadata_tokens prioritized_stream in
-          (* We don't know if there are more without consuming the stream, so check buffer size *)
-          let buffer_full = Diagnostic_stream.PriorityBuffer.current_size filled_buffer >= Diagnostic_stream.PriorityBuffer.max_size filled_buffer in
-          let truncation_reason = if buffer_full then 
-            Some (Printf.sprintf "Results limited to %d diagnostics due to token constraints" (Diagnostic_stream.PriorityBuffer.max_size filled_buffer))
+          (* Check if more diagnostics available *)
+          let limited_results = Diagnostic_stream.to_list ~limit:page_size token_limited_stream in
+          let has_more_results = List.length limited_results >= page_size in
+          let next_cursor = if has_more_results then Some (string_of_int page_size) else None in
+          let truncation_reason = if has_more_results then 
+            Some "Results limited by token constraints - use next_cursor to get more pages"
           else None in
-          (token_limited_stream, buffer_full, None, truncation_reason)
+          (Diagnostic_stream.of_list limited_results, has_more_results, next_cursor, truncation_reason)
     in
     
     (* Step 6: Materialize final results with limit to prevent memory issues *)
@@ -362,7 +382,7 @@ let execute ~sw:_ ~env:_ (sdk : Ocaml_platform_sdk.t) (args : Args.t) =
           let processing_result = StreamingProcessor.process_diagnostics_stream
             ~severity_filter
             ~file_pattern:args.file_pattern
-            ~page:args.page
+            ~cursor:args.cursor
             ~page_size
             ~token_limit
             ~metadata_tokens:metadata_estimate

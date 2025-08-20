@@ -42,6 +42,9 @@ val take_while_under_token_limit : token_limit:int -> metadata_tokens:int -> Bui
 val take_page : page:int -> page_size:int -> Build_types.Output.diagnostic stream -> Build_types.Output.diagnostic stream
 (** [take_page ~page ~page_size stream] implements pagination on stream *)
 
+val skip_take : skip:int -> take:int -> Build_types.Output.diagnostic stream -> Build_types.Output.diagnostic stream
+(** [skip_take ~skip ~take stream] skips [skip] items then takes [take] items from stream *)
+
 val of_list : Build_types.Output.diagnostic list -> Build_types.Output.diagnostic stream
 (** [of_list lst] converts list to stream *)
 

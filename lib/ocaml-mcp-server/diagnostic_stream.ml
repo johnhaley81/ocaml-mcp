@@ -106,6 +106,24 @@ let take_page ~page ~page_size stream =
             Some item
     in loop ()
 
+let skip_take ~skip ~take stream =
+  let skipped = ref 0 in
+  let taken = ref 0 in
+  
+  fun () ->
+    let rec loop () =
+      if !taken >= take then None
+      else
+        match stream () with
+        | None -> None
+        | Some _item when !skipped < skip ->
+            incr skipped;
+            loop ()
+        | Some item ->
+            incr taken;
+            Some item
+    in loop ()
+
 (* Convert list to stream for compatibility *)
 let of_list lst =
   let remaining = ref lst in
