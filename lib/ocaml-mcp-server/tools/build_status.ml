@@ -80,11 +80,13 @@ module Args = struct
       | Some n -> Ok (Some n)
     in
     
-    (* Validate page (non-negative) *)
+    (* Validate page (non-negative and reasonable upper bound) *)
     let page_result = match json_args.page with
       | None -> Ok None
       | Some p when p < 0 -> 
           Error (`Invalid_page (p, "must be >= 0 (0-based pagination)"))
+      | Some p when p > 1000 -> 
+          Error (`Invalid_page (p, "must be <= 1000 to prevent memory exhaustion"))
       | Some p -> Ok (Some p)
     in
     
@@ -250,7 +252,10 @@ module StreamingProcessor = struct
     
     (* Step 4: Priority sorting using streaming buffer *)
     let max_buffer_size = match page with
-      | Some p -> (p + 1) * page_size + 100  (* Only buffer what we need for the page plus safety *)
+      | Some p -> 
+          (* Cap buffer size to prevent memory exhaustion attacks *)
+          let requested_buffer = (p + 1) * page_size + 100 in
+          min 10000 requested_buffer  (* Never exceed 10,000 diagnostics in memory *)
       | None -> min 10000 (List.length input_diagnostics) (* Reasonable buffer limit *)
     in
     

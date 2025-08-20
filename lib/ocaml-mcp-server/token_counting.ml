@@ -3,19 +3,52 @@
     This module provides empirically-validated token counting for various
     text patterns commonly found in OCaml/Dune build outputs. *)
 
-(* Cache for token estimates to improve performance *)
+(* Helper function for List.split_n - splits list into first n elements and rest *)
+let split_n n lst =
+  let rec aux acc n = function
+    | [] -> (List.rev acc, [])
+    | hd :: tl when n > 0 -> aux (hd :: acc) (n - 1) tl
+    | rest -> (List.rev acc, rest)
+  in
+  aux [] n lst
+
+(* LRU Cache for token estimates to improve performance *)
 module TokenCache = struct
-  let cache : (string, int) Hashtbl.t = Hashtbl.create 1024
+  type cache_entry = {
+    value: int;
+    mutable access_time: float;
+  }
+  
+  let cache : (string, cache_entry) Hashtbl.t = Hashtbl.create 1024
   let max_size = 2048
+  let access_counter = ref 0.0
+  
+  let incr_access_counter () =
+    access_counter := !access_counter +. 1.0
+    
+  let get_access_time () =
+    incr_access_counter ();
+    !access_counter
+  
+  let evict_lru_entries () =
+    let entries = Hashtbl.fold (fun key entry acc -> (key, entry) :: acc) cache [] in
+    let sorted_entries = List.sort (fun (_, e1) (_, e2) -> 
+      Float.compare e1.access_time e2.access_time) entries in
+    let to_remove = max 1 (List.length sorted_entries / 4) in (* Remove 25% of oldest entries *)
+    let (remove_list, _) = split_n to_remove sorted_entries in
+    List.iter (fun (key, _) -> Hashtbl.remove cache key) remove_list
   
   let get_or_compute key compute_fn =
     match Hashtbl.find_opt cache key with
-    | Some value -> value
+    | Some entry ->
+        entry.access_time <- get_access_time ();
+        entry.value
     | None ->
         let value = compute_fn () in
         if Hashtbl.length cache >= max_size then
-          Hashtbl.clear cache; (* Simple eviction strategy *)
-        Hashtbl.replace cache key value;
+          evict_lru_entries ();
+        let entry = { value; access_time = get_access_time () } in
+        Hashtbl.replace cache key entry;
         value
 end
 
