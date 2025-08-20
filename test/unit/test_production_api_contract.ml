@@ -378,10 +378,23 @@ module APIContractTests = struct
       (`Assoc [("file_pattern", `String (String.make 250 'a'))], "too long");
     ] in
     
-    List.iteri (fun i (json, _expected_msg_fragment) ->
+    List.iteri (fun i (json, expected_msg_fragment) ->
       let (result, duration) = measure_performance (fun () -> Args.of_yojson json) in
       let status = match result with
-        | Error _msg -> Pass (* TODO: Fix substring matching *)
+        | Error msg ->
+            (* Check if error message contains expected fragment using simple substring search *)
+            let contains_fragment = 
+              let msg_len = String.length msg in
+              let fragment_len = String.length expected_msg_fragment in
+              let rec search pos =
+                if pos + fragment_len > msg_len then false
+                else if String.sub msg pos fragment_len = expected_msg_fragment then true
+                else search (pos + 1)
+              in
+              if fragment_len = 0 then true else search 0
+            in
+            if contains_fragment then Pass
+            else Fail (sprintf "Error message '%s' doesn't contain expected fragment '%s'" msg expected_msg_fragment)
         | Ok _ -> Fail "Expected error but got success"
       in
       record_test (sprintf "Error message quality %d" i) status ~duration_ms:duration ()
