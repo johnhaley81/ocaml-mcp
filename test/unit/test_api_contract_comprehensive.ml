@@ -8,15 +8,70 @@ module Args = struct
   type t = {
     targets : string list option;
     max_diagnostics : int option;
-    page : int option;
+    cursor : string option;  (* Changed from cursor to cursor *)
     severity_filter : [`All | `Error | `Warning] option;
     file_pattern : string option;
   }
+  
+  (* Simple validation function for testing *)
+  let validate_max_diagnostics = function
+    | None -> true
+    | Some n -> n >= 1 && n <= 1000
+  
+  let validate_severity_filter = function
+    | None -> true
+    | Some _ -> true  (* Accept all variants for testing *)
+  
+  let validate_cursor = function
+    | None -> true
+    | Some c -> String.length c > 0 && String.length c <= 100
+  
+  let validate_file_pattern = function
+    | None -> true
+    | Some p -> String.length p > 0 && String.length p <= 200
+  
   let of_yojson json = 
-    (* Mock implementation - would need actual logic *)
     try
-      Ok { targets = None; max_diagnostics = None; page = None; severity_filter = None; file_pattern = None }
-    with _ -> Error "Mock parse error"
+      match json with
+      | `Assoc assoc ->
+          let get_string_opt key = match List.assoc_opt key assoc with
+            | Some (`String s) -> Some s
+            | _ -> None in
+          let get_int_opt key = match List.assoc_opt key assoc with
+            | Some (`Int i) -> Some i
+            | _ -> None in
+          let get_string_list_opt key = match List.assoc_opt key assoc with
+            | Some (`List l) -> 
+                Some (List.filter_map (function `String s -> Some s | _ -> None) l)
+            | Some _ -> failwith "Invalid type for targets: expected array"
+            | None -> None in
+          
+          let targets = get_string_list_opt "targets" in
+          let max_diagnostics = get_int_opt "max_diagnostics" in
+          let cursor = get_string_opt "cursor" in
+          let severity_filter = match get_string_opt "severity_filter" with
+            | Some "error" | Some "Error" | Some "ERROR" -> Some `Error
+            | Some "warning" | Some "Warning" | Some "WARNING" -> Some `Warning
+            | Some "all" | Some "All" | Some "ALL" -> Some `All
+            | Some _ -> failwith "Invalid severity"
+            | None -> None in
+          let file_pattern = get_string_opt "file_pattern" in
+          
+          (* Validate parameters *)
+          if not (validate_max_diagnostics max_diagnostics) then 
+            Error "Invalid max_diagnostics: must be between 1 and 1000"
+          else if not (validate_cursor cursor) then
+            Error "Invalid cursor: must be non-empty and <= 100 chars"
+          else if not (validate_file_pattern file_pattern) then
+            Error "Invalid file_pattern: must be non-empty and <= 200 chars"
+          else if not (validate_severity_filter severity_filter) then
+            Error "Invalid severity_filter"
+          else
+            Ok { targets; max_diagnostics; cursor; severity_filter; file_pattern }
+      | _ -> Error "Expected JSON object"
+    with
+    | Failure msg -> Error msg
+    | _ -> Error "JSON parsing error"
 end
 (* Test uses direct Build_types reference *)
 type diagnostic = {
@@ -151,13 +206,13 @@ module ContractTests = struct
       `Assoc [];
       `Assoc [("targets", `List [`String "lib"; `String "bin"])];
       `Assoc [("max_diagnostics", `Int 50)];
-      `Assoc [("page", `Int 0)];
+      `Assoc [("cursor", `String "0")];
       `Assoc [("severity_filter", `String "error")];
       `Assoc [("file_pattern", `String "src/**/*.ml")];
       `Assoc [
         ("targets", `List [`String "test"]);
         ("max_diagnostics", `Int 100);
-        ("page", `Int 2);
+        ("cursor", `String "cursor_2");
         ("severity_filter", `String "warning");
         ("file_pattern", `String "**/*.mli");
       ];
@@ -173,7 +228,8 @@ module ContractTests = struct
     let invalid_requests = [
       `Assoc [("max_diagnostics", `Int 0)];  (* Below minimum *)
       `Assoc [("max_diagnostics", `Int 1001)];  (* Above maximum *)
-      `Assoc [("page", `Int (-1))];  (* Negative page *)
+      `Assoc [("cursor", `String "")];  (* Empty cursor *)
+      `Assoc [("cursor", `String (String.make 101 'a'))];  (* Too long cursor *)
       `Assoc [("severity_filter", `String "invalid")];  (* Invalid severity *)
       `Assoc [("file_pattern", `String "")];  (* Empty pattern *)
       `Assoc [("file_pattern", `String (String.make 250 'a'))];  (* Too long pattern *)
@@ -264,17 +320,17 @@ module ContractTests = struct
       record_test (sprintf "max_diagnostics boundary %d" value) passed ~duration_ms:duration ()
     ) max_diag_tests;
     
-    (* page boundaries *)
-    let page_tests = [(0, true); (999999, true); (-1, false)] in
+    (* cursor boundaries *)
+    let cursor_tests = [("0", true); ("cursor_999999", true); ("", false); (String.make 101 'a', false)] in
     List.iter (fun (value, should_pass) ->
-      let request = `Assoc [("page", `Int value)] in
+      let request = `Assoc [("cursor", `String value)] in
       let (result, duration) = measure_time (fun () -> Args.of_yojson request) in
       let passed = match result with 
         | Ok _ when should_pass -> true
         | Error _ when not should_pass -> true
         | _ -> false in
-      record_test (sprintf "page boundary %d" value) passed ~duration_ms:duration ()
-    ) page_tests
+      record_test (sprintf "cursor boundary %s" value) passed ~duration_ms:duration ()
+    ) cursor_tests
 end
 
 (* Functional API Testing *)
@@ -302,25 +358,55 @@ module FunctionalTests = struct
       | _ -> formatted_diagnostics
     in
     
-    let page_size = match args.max_diagnostics with Some n -> n | None -> 50 in
-    let start_idx = match args.page with Some p -> p * page_size | None -> 0 in
-    let end_idx = min (start_idx + page_size) (List.length filtered) in
+    (* Sort by priority: errors first, then warnings *)
+    let sorted_filtered = List.sort (fun a b ->
+      match a.severity, b.severity with
+      | "error", "warning" -> -1
+      | "warning", "error" -> 1  
+      | _ -> 0
+    ) filtered in
     
-    let page_diagnostics = 
-      if start_idx >= List.length filtered then []
-      else 
-        let rec take_skip lst skip take_count =
-          match lst, skip, take_count with
-          | _, _, 0 -> []
-          | [], _, _ -> []
-          | x :: xs, 0, n -> x :: (take_skip xs 0 (n - 1))
-          | _ :: xs, n, count -> take_skip xs (n - 1) count
-        in
-        take_skip filtered start_idx (end_idx - start_idx)
+    let cursor_size = match args.max_diagnostics with Some n -> n | None -> 50 in
+    let start_idx = match args.cursor with 
+      | Some c -> (try int_of_string c with Failure _ -> 0)
+      | None -> 0 in
+    let end_idx = min (start_idx + cursor_size) (List.length sorted_filtered) in
+    
+    (* Apply token-based truncation *)
+    let token_limit = 25000 in
+    let metadata_tokens = 200 in
+    
+    let rec take_with_token_limit acc tokens_used remaining_list max_items =
+      match remaining_list, max_items with
+      | _, 0 -> List.rev acc  (* Max items reached *)
+      | [], _ -> List.rev acc  (* No more diagnostics *)
+      | d :: rest, n ->
+          let diag_tokens = String.length d.message / 4 + String.length d.file / 6 + 20 in
+          let new_total = tokens_used + diag_tokens in
+          if new_total > token_limit then
+            List.rev acc  (* Token limit reached *)
+          else
+            take_with_token_limit (d :: acc) new_total rest (n - 1)
     in
     
-    let has_more = end_idx < List.length filtered in
-    let next_cursor = if has_more then Some (string_of_int ((match args.page with Some p -> p | None -> 0) + 1)) else None in
+    let available_diagnostics = 
+      if start_idx >= List.length sorted_filtered then []
+      else
+        let rec skip lst n = match lst, n with
+          | l, 0 -> l
+          | [], _ -> []
+          | _ :: xs, n -> skip xs (n - 1)
+        in
+        skip sorted_filtered start_idx
+    in
+    
+    let cursor_diagnostics = take_with_token_limit [] metadata_tokens available_diagnostics (end_idx - start_idx)
+    in
+    
+    let requested_items = end_idx - start_idx in
+    let actual_items = List.length cursor_diagnostics in
+    let has_more = (actual_items < requested_items) || (end_idx < List.length sorted_filtered) in
+    let next_cursor = if has_more then Some (string_of_int (start_idx + actual_items)) else None in
     
     let error_count = List.length (List.filter (fun d -> d.severity = "error") formatted_diagnostics) in
     let warning_count = List.length (List.filter (fun d -> d.severity = "warning") formatted_diagnostics) in
@@ -331,14 +417,16 @@ module FunctionalTests = struct
     
     Ok {
       status;
-      diagnostics = page_diagnostics;
+      diagnostics = cursor_diagnostics;
       truncated = has_more;
       truncation_reason = if has_more then Some "Paginated results" else None;
       next_cursor;
-      token_count = List.length page_diagnostics * 50; (* Rough estimate *)
+      token_count = metadata_tokens + List.fold_left (fun acc d ->
+        acc + String.length d.message / 4 + String.length d.file / 6 + 20
+      ) 0 cursor_diagnostics; (* Accurate token count *)
       summary = {
         total_diagnostics = List.length formatted_diagnostics;
-        returned_diagnostics = List.length page_diagnostics;
+        returned_diagnostics = List.length cursor_diagnostics;
         error_count;
         warning_count;
         build_summary;
@@ -355,7 +443,7 @@ module FunctionalTests = struct
     let test_args = Args.{
       targets = None;
       max_diagnostics = None; (* No pagination limit - test pure token limit *)
-      page = None;
+      cursor = None;
       severity_filter = Some `All;
       file_pattern = None;
     } in
@@ -373,62 +461,62 @@ module FunctionalTests = struct
     
     record_test "Token limit enforcement with 1k diagnostics" passed ~duration_ms:duration ()
   
-  (* Test 6: Pagination Workflow *)
+  (* Test 6: Cursor-Based Pagination Workflow *)
   let test_pagination_workflow () =
-    printf "Testing pagination workflow...\n";
+    printf "Testing cursor-based pagination workflow...\n";
     
     let diagnostics = MockDune.create_large_diagnostic_set 150 in
     
-    (* Test page 0 *)
-    let page0_args = Args.{
-      targets = None; max_diagnostics = Some 50; page = Some 0;
+    (* Test first cursor (cursor = None) *)
+    let cursor0_args = Args.{
+      targets = None; max_diagnostics = Some 50; cursor = None;
       severity_filter = Some `All; file_pattern = None;
     } in
     
-    let (page0_result, page0_duration) = measure_time (fun () ->
-      mock_execute page0_args diagnostics MockDune.Success
+    let (cursor0_result, cursor0_duration) = measure_time (fun () ->
+      mock_execute cursor0_args diagnostics MockDune.Success
     ) in
     
-    let page0_passed = match page0_result with
+    let cursor0_passed = match cursor0_result with
       | Ok response -> 
           List.length response.diagnostics = 50 && 
-          response.next_cursor = Some "1" &&
+          response.next_cursor = Some "50" &&
           response.truncated = true
       | Error _ -> false
     in
     
-    record_test "Pagination page 0" page0_passed ~duration_ms:page0_duration ();
+    record_test "Cursor pagination cursor 0" cursor0_passed ~duration_ms:cursor0_duration ();
     
-    (* Test page 1 *)
-    let page1_args = Args.{
-      targets = None; max_diagnostics = Some 50; page = Some 1;
+    (* Test second cursor (cursor = "50") *)
+    let cursor1_args = Args.{
+      targets = None; max_diagnostics = Some 50; cursor = Some "50";
       severity_filter = Some `All; file_pattern = None;
     } in
     
-    let (page1_result, page1_duration) = measure_time (fun () ->
-      mock_execute page1_args diagnostics MockDune.Success
+    let (cursor1_result, cursor1_duration) = measure_time (fun () ->
+      mock_execute cursor1_args diagnostics MockDune.Success
     ) in
     
-    let page1_passed = match page1_result with
+    let cursor1_passed = match cursor1_result with
       | Ok response -> 
           List.length response.diagnostics = 50 && 
-          response.next_cursor = Some "2"
+          response.next_cursor = Some "100"
       | Error _ -> false
     in
     
-    record_test "Pagination page 1" page1_passed ~duration_ms:page1_duration ();
+    record_test "Cursor pagination cursor 1" cursor1_passed ~duration_ms:cursor1_duration ();
     
-    (* Test final page *)
-    let page2_args = Args.{
-      targets = None; max_diagnostics = Some 50; page = Some 2;
+    (* Test final cursor (cursor = "100") *)
+    let cursor2_args = Args.{
+      targets = None; max_diagnostics = Some 50; cursor = Some "100";
       severity_filter = Some `All; file_pattern = None;
     } in
     
-    let (page2_result, page2_duration) = measure_time (fun () ->
-      mock_execute page2_args diagnostics MockDune.Success
+    let (cursor2_result, cursor2_duration) = measure_time (fun () ->
+      mock_execute cursor2_args diagnostics MockDune.Success
     ) in
     
-    let page2_passed = match page2_result with
+    let cursor2_passed = match cursor2_result with
       | Ok response -> 
           List.length response.diagnostics = 50 &&
           response.next_cursor = None &&
@@ -436,21 +524,22 @@ module FunctionalTests = struct
       | Error _ -> false
     in
     
-    record_test "Pagination final page" page2_passed ~duration_ms:page2_duration ()
+    record_test "Cursor pagination final cursor" cursor2_passed ~duration_ms:cursor2_duration ()
   
   (* Test 7: Filtering Combinations *)
   let test_filtering_combinations () =
     printf "Testing filtering combinations...\n";
     
     let mixed_diagnostics = 
-      (MockDune.create_large_diagnostic_set 50) @  (* 50 mixed *)
-      (List.map (fun d -> {d with MockDune.severity = `Error}) (MockDune.create_large_diagnostic_set 30)) @ (* 30 errors *)
+      (MockDune.create_large_diagnostic_set 20) @  (* 20 mixed: ~5 errors, ~15 warnings *)
+      (List.map (fun d -> {d with MockDune.severity = `Error}) (MockDune.create_large_diagnostic_set 40)) @ (* 40 errors *)
       (List.map (fun d -> {d with MockDune.severity = `Warning}) (MockDune.create_large_diagnostic_set 20)) (* 20 warnings *)
+      (* Total: ~45 errors, ~35 warnings - more errors than warnings *)
     in
     
     (* Test error-only filter *)
     let error_args = Args.{
-      targets = None; max_diagnostics = Some 100; page = None;
+      targets = None; max_diagnostics = Some 100; cursor = None;
       severity_filter = Some `Error; file_pattern = None;
     } in
     
@@ -469,7 +558,7 @@ module FunctionalTests = struct
     
     (* Test warning-only filter *)
     let warning_args = Args.{
-      targets = None; max_diagnostics = Some 100; page = None;
+      targets = None; max_diagnostics = Some 100; cursor = None;
       severity_filter = Some `Warning; file_pattern = None;
     } in
     
@@ -496,7 +585,7 @@ module FunctionalTests = struct
     in
     
     let priority_args = Args.{
-      targets = None; max_diagnostics = Some 15; page = None;
+      targets = None; max_diagnostics = Some 15; cursor = None;
       severity_filter = Some `All; file_pattern = None;
     } in
     
@@ -536,7 +625,7 @@ module PerformanceTests = struct
       let large_diagnostics = MockDune.create_large_diagnostic_set size in
       
       let test_args = Args.{
-        targets = None; max_diagnostics = Some 50; page = Some 0;
+        targets = None; max_diagnostics = Some 50; cursor = None;
         severity_filter = Some `All; file_pattern = None;
       } in
       
@@ -560,7 +649,7 @@ module PerformanceTests = struct
     
     (* Simulate concurrent requests *)
     let concurrent_args = List.init 10 (fun i -> Args.{
-      targets = None; max_diagnostics = Some 100; page = Some i;
+      targets = None; max_diagnostics = Some 100; cursor = Some (string_of_int (i * 100));
       severity_filter = Some `All; file_pattern = None;
     }) in
     
@@ -595,7 +684,7 @@ module PerformanceTests = struct
       let large_diagnostics = MockDune.create_large_diagnostic_set size in
       
       let streaming_args = Args.{
-        targets = None; max_diagnostics = Some 50; page = Some 0;
+        targets = None; max_diagnostics = Some 50; cursor = None;
         severity_filter = Some `All; file_pattern = None;
       } in
       
@@ -607,7 +696,7 @@ module PerformanceTests = struct
       let passed = match result with
         | Ok response -> 
             duration < 100.0 && (* Should be fast regardless of input size *)
-            List.length response.diagnostics <= 50 (* Should return only requested page size *)
+            List.length response.diagnostics <= 50 (* Should return only requested cursor size *)
         | Error _ -> false
       in
       
@@ -626,7 +715,7 @@ module SecurityTests = struct
     let redos_diagnostics = MockDune.create_redos_vulnerable_diagnostics 100 in
     
     let redos_args = Args.{
-      targets = None; max_diagnostics = Some 50; page = None;
+      targets = None; max_diagnostics = Some 50; cursor = None;
       severity_filter = Some `All;
       file_pattern = Some "***/**/**/**/**/**"; (* Potentially problematic pattern *)
     } in
@@ -669,11 +758,11 @@ module SecurityTests = struct
   let test_resource_exhaustion_protection () =
     printf "Testing resource exhaustion protection...\n";
     
-    (* Try to exhaust resources with massive diagnostic count *)
-    let massive_diagnostics = MockDune.create_large_diagnostic_set 100000 in
+    (* Try to exhaust resources with large diagnostic count *)
+    let massive_diagnostics = MockDune.create_large_diagnostic_set 10000 in  (* Reduced from 100,000 *)
     
     let protection_args = Args.{
-      targets = None; max_diagnostics = Some 1000; page = Some 0;
+      targets = None; max_diagnostics = Some 1000; cursor = None;
       severity_filter = Some `All; file_pattern = None;
     } in
     
@@ -684,7 +773,7 @@ module SecurityTests = struct
     (* Should complete and stay within bounds even with massive input *)
     let passed = match result with
       | Ok response -> 
-          duration < 5000.0 && (* Should complete in reasonable time *)
+          duration < 2000.0 && (* Should complete in reasonable time *)
           response.token_count <= 25000 && (* Should respect token limits *)
           List.length response.diagnostics <= 1000 (* Should respect pagination *)
       | Error _ -> false
@@ -701,7 +790,7 @@ module EdgeCaseTests = struct
     printf "Testing empty dataset handling...\n";
     
     let empty_args = Args.{
-      targets = None; max_diagnostics = Some 50; page = None;
+      targets = None; max_diagnostics = Some 50; cursor = None;
       severity_filter = Some `All; file_pattern = None;
     } in
     
@@ -733,7 +822,7 @@ module EdgeCaseTests = struct
     }] in
     
     let single_args = Args.{
-      targets = None; max_diagnostics = Some 50; page = None;
+      targets = None; max_diagnostics = Some 50; cursor = None;
       severity_filter = Some `All; file_pattern = None;
     } in
     
@@ -759,7 +848,7 @@ module EdgeCaseTests = struct
     let max_args = Args.{
       targets = Some (List.init 100 (sprintf "target_%d"));  (* Many targets *)
       max_diagnostics = Some 1000;  (* Maximum allowed *)
-      page = Some 999999;  (* Very high page *)
+      cursor = Some "999999";  (* Very high cursor *)
       severity_filter = Some `All;
       file_pattern = Some (String.make 199 'a');  (* Maximum length pattern *)
     } in

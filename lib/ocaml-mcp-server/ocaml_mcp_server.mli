@@ -102,4 +102,11 @@ module Tools : sig
   module Type_at_pos : S
 end
 
+(** {1 Utility Modules} *)
+
+module Token_counting : module type of Token_counting
+module Build_types : module type of Build_types  
+module Diagnostic_stream : module type of Diagnostic_stream
+module File_utils : module type of File_utils
+
 

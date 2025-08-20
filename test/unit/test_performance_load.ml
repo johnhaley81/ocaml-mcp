@@ -10,7 +10,7 @@ module Args = struct
   type t = {
     targets : string list option;
     max_diagnostics : int option;
-    page : int option;
+    cursor : string option;  (* Changed from page to cursor *)
     severity_filter : [`All | `Error | `Warning] option;
     file_pattern : string option;
   }
@@ -206,8 +206,9 @@ module LoadTester = struct
       
       (* Apply pagination *)
       let page_size = match args.max_diagnostics with Some n -> n | None -> 50 in
-      let page = match args.page with Some p -> p | None -> 0 in
-      let start_idx = page * page_size in
+      let start_idx = match args.cursor with 
+        | Some c -> (try int_of_string c with Failure _ -> 0)
+        | None -> 0 in
       let end_idx = min (start_idx + page_size) (List.length sorted_diagnostics) in
       
       let page_diagnostics = 
@@ -238,7 +239,7 @@ module LoadTester = struct
         truncation_reason = if estimated_tokens > 20000 then Some "Token limit reached" 
                            else if List.length sorted_diagnostics > List.length page_diagnostics then Some "Paginated results"
                            else None;
-        next_cursor = if end_idx < List.length sorted_diagnostics then Some (string_of_int (page + 1)) else None;
+        next_cursor = if end_idx < List.length sorted_diagnostics then Some (string_of_int (start_idx + page_size)) else None;
         token_count = estimated_tokens;
         summary = {
           total_diagnostics = List.length diagnostics;
@@ -270,7 +271,7 @@ module LoadTester = struct
     let test_args = Args.{
       targets = None;
       max_diagnostics = Some 50;
-      page = Some 0;
+      cursor = None;
       severity_filter = Some `All;
       file_pattern = match scenario.file_pattern_complexity with
         | `None -> None
@@ -493,7 +494,7 @@ module TokenLimitPerformanceTests = struct
         let args = Args.{
           targets = None;
           max_diagnostics = Some page_size;
-          page = Some page;
+          cursor = Some (string_of_int (page * page_size));  (* Convert page to cursor *)
           severity_filter = Some `All;
           file_pattern = None;
         } in

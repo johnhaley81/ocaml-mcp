@@ -37,7 +37,7 @@ Start dune RPC and MCP server:
   $ sleep 1
 
   $ mcp --pipe test.sock call dune_build_status
-  {"status":"waiting","diagnostics":[],"truncated":true,"truncation_reason":"Results limited to 0 diagnostics due to token constraints","token_count":108,"summary":{"total_diagnostics":0,"returned_diagnostics":0,"error_count":0,"warning_count":0}}
+  {"status":"waiting","diagnostics":[],"truncated":false,"truncation_reason":null,"next_cursor":null,"token_count":99,"summary":{"total_diagnostics":0,"returned_diagnostics":0,"error_count":0,"warning_count":0,"build_summary":null}}
 
 Clean up:
 

@@ -1,7 +1,16 @@
 (** Token counting system for build status responses.
 
     This module provides empirically-validated token counting for various
-    text patterns commonly found in OCaml/Dune build outputs. *)
+    text patterns commonly found in OCaml/Dune build outputs.
+    
+    The system uses a combination of:
+    - OCaml-specific vocabulary with measured token counts
+    - Heuristic analysis of file paths, module paths, and error messages
+    - JSON structure overhead calculations
+    - LRU caching for performance
+    
+    For production use, consider using the calibrated versions from
+    Token_calibration module which apply validation-based corrections. *)
 
 (* Helper function for List.split_n - splits list into first n elements and rest *)
 let split_n n lst =
@@ -176,6 +185,12 @@ let estimate_diagnostic_tokens (d : Build_types.Output.diagnostic) : int =
   severity_tokens + file_tokens + line_tokens + column_tokens + 
   message_tokens + json_overhead
 
+(* Production-ready token estimation with conservative estimates *)
+let estimate_text_tokens_conservative (text : string) : int =
+  (* Apply a 10% safety margin to the empirical estimate *)
+  let base_estimate = estimate_text_tokens_empirical text in
+  max 1 (int_of_float (float_of_int base_estimate *. 1.1))
+
 (* Comprehensive response token estimation *)
 let estimate_response_tokens (output : Build_types.Output.t) : int =
   (* Calculate tokens for all diagnostics *)
@@ -245,6 +260,35 @@ let estimate_response_tokens (output : Build_types.Output.t) : int =
   (* Main response object structure overhead *)
   let main_object_overhead = 10 in  (* Root object braces, commas, etc. *)
   
-  diagnostics_tokens + diagnostics_array_overhead + status_tokens + truncated_tokens + 
-  truncation_reason_tokens + next_cursor_tokens + token_count_tokens + 
-  summary_tokens + main_object_overhead
+  let total_estimate = diagnostics_tokens + diagnostics_array_overhead + status_tokens + truncated_tokens + 
+                      truncation_reason_tokens + next_cursor_tokens + token_count_tokens + 
+                      summary_tokens + main_object_overhead in
+  
+  (* Apply conservative margin for production reliability *)
+  max 1 (int_of_float (float_of_int total_estimate *. 1.08))
+
+(* Validation and debugging utilities *)
+let estimate_breakdown (text : string) : (string * int) list =
+  let len = String.length text in
+  let words = String.split_on_char ' ' text in
+  let word_count = List.length words in
+  let char_estimate = len / 4 in (* rough chars-per-token *)
+  let word_estimate = word_count in
+  let empirical_estimate = estimate_text_tokens_empirical text in
+  let conservative_estimate = estimate_text_tokens_conservative text in
+  
+  [
+    ("Character-based (len/4)", char_estimate);
+    ("Word-based", word_estimate);
+    ("Empirical (OCaml-aware)", empirical_estimate);
+    ("Conservative (+10%)", conservative_estimate);
+  ]
+
+(* Utility function for debugging - marked as used to avoid warning *)
+let[@warning "-32"] print_estimate_breakdown (text : string) : unit =
+  Printf.printf "Token estimation breakdown for: %s\n" 
+    (if String.length text > 50 then String.sub text 0 47 ^ "..." else text);
+  let breakdown = estimate_breakdown text in
+  List.iter (fun (method_name, estimate) ->
+    Printf.printf "  %-25s: %d tokens\n" method_name estimate
+  ) breakdown

@@ -33,6 +33,7 @@ with summary information, token counting, and proper field structure.
   $ mcp --pipe test.sock call dune_build_status | jq 'keys | sort'
   [
     "diagnostics",
+    "next_cursor",
     "status",
     "summary",
     "token_count",
@@ -44,6 +45,7 @@ with summary information, token counting, and proper field structure.
 
   $ mcp --pipe test.sock call dune_build_status | jq '.summary | keys | sort'
   [
+    "build_summary",
     "error_count",
     "returned_diagnostics",
     "total_diagnostics",

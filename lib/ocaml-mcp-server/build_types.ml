@@ -25,17 +25,17 @@ module Output = struct
     returned_diagnostics : int;
     error_count : int;
     warning_count : int;
-    build_summary : build_summary option [@default None];
+    build_summary : build_summary option;
   }
   [@@deriving yojson]
 
   type t = { 
     status : string; 
     diagnostics : diagnostic list;
-    truncated : bool [@default false];
-    truncation_reason : string option [@default None];
-    next_cursor : string option [@default None];
-    token_count : int [@default 0];
+    truncated : bool;
+    truncation_reason : string option;
+    next_cursor : string option;
+    token_count : int;
     summary : diagnostic_summary;
   }
   [@@deriving yojson]

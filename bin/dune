@@ -27,3 +27,14 @@
   cmdliner
   jsonrpc
   yojson))
+
+(executable
+ (public_name validate-tokens)
+ (package ocaml-mcp-server)
+ (name validate_tokens_simple)
+ (modules validate_tokens_simple)
+ (libraries
+  ocaml-mcp-server
+  cmdliner
+  yojson
+  unix))

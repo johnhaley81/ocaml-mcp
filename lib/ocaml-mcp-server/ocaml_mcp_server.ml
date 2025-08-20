@@ -137,4 +137,10 @@ module Tools = struct
   module Type_at_pos = Type_at_pos
 end
 
+(* Export utility modules *)
+module Token_counting = Token_counting
+module Build_types = Build_types
+module Diagnostic_stream = Diagnostic_stream
+module File_utils = File_utils
+
 
